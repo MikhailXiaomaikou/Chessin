@@ -20,5 +20,8 @@ export const IPC = {
   DATABASE_OPEN: 'database:open',
   DATABASE_SEARCH: 'database:search',
   DATABASE_GET_GAME: 'database:get-game',
-  DATABASE_GET_OPENING_STATS: 'database:get-opening-stats'
+  DATABASE_GET_OPENING_STATS: 'database:get-opening-stats',
+
+  // LLM player channels
+  LLM_CHAT: 'llm:chat'
 } as const

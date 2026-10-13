@@ -6,6 +6,7 @@ import { useAnalysisStore } from '@renderer/stores/analysisStore'
 import { useGameAnalysis } from '@renderer/analysis/useGameAnalysis'
 import { useT } from '@renderer/i18n/useI18n'
 import NewGameDialog from './NewGameDialog'
+import { useLlmStore, isLlmGameActive } from '@renderer/stores/llmStore'
 
 export default function GameControls() {
   const t = useT()
@@ -21,6 +22,8 @@ export default function GameControls() {
   const loadPgn = useGameStore((s) => s.loadPgn)
   const newGame = useGameStore((s) => s.newGame)
   const moveHistory = useGameStore((s) => s.moveHistory)
+  const llmGameActive = useLlmStore((s) => isLlmGameActive(s.match))
+  const endMatch = useLlmStore((s) => s.endMatch)
 
   const showCopied = (label: string) => {
     setCopied(label)
@@ -67,7 +70,7 @@ export default function GameControls() {
         >
           {t('game.new')}
         </button>
-        {hasEngines && hasMoves && (
+        {hasEngines && hasMoves && !llmGameActive && (
           <button
             onClick={handleAnalyzeGame}
             className={`px-5 py-2 text-base rounded-md font-medium transition-colors ${
@@ -128,10 +131,12 @@ export default function GameControls() {
         <ImportDialog
           onClose={() => setShowImport(false)}
           onImportPgn={(pgn) => {
+            endMatch()
             loadPgn(pgn)
             setShowImport(false)
           }}
           onImportFen={(fen) => {
+            endMatch()
             newGame(fen)
             setShowImport(false)
           }}

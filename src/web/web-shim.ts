@@ -2,6 +2,8 @@
 // This replaces Electron IPC with browser-compatible implementations.
 
 import { stockfishBridge } from './stockfish-worker-bridge'
+import { chatWithLlm } from '../shared/llm/client'
+import type { LlmChatRequest } from '../shared/llm/types'
 
 export function installWebShim() {
   // Only install if electronAPI is not already provided (i.e., not in Electron)
@@ -62,6 +64,12 @@ export function installWebShim() {
       search: async () => [],
       getGame: async () => null,
       getOpeningStats: async () => []
+    },
+
+    // No main process here, so LLM requests go straight from the page.
+    // OpenAI-compatible servers must allow CORS (for Ollama: OLLAMA_ORIGINS=*).
+    llm: {
+      chat: (req: LlmChatRequest) => chatWithLlm(req, { browser: true })
     },
 
     clipboard: {

@@ -7,6 +7,9 @@ import DatabasePanel from '@renderer/database/DatabasePanel'
 import BoardEditor from '@renderer/board/BoardEditor'
 import TabBar from '@renderer/layout/TabBar'
 import { useUIStore } from '@renderer/stores/uiStore'
+import LlmPanel from '@renderer/llm/LlmPanel'
+import { useLlmMatch } from '@renderer/llm/useLlmMatch'
+import { useLlmStore, isLlmGameActive } from '@renderer/stores/llmStore'
 import { useT } from '@renderer/i18n/useI18n'
 
 type RightTab = 'notation' | 'database'
@@ -15,6 +18,8 @@ export default function MainLayout() {
   const t = useT()
   const [activeTab, setActiveTab] = useState<RightTab>('notation')
   const boardEditorMode = useUIStore((s) => s.boardEditorMode)
+  const llmGameActive = useLlmStore((s) => isLlmGameActive(s.match))
+  useLlmMatch()
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
@@ -34,9 +39,12 @@ export default function MainLayout() {
           ) : (
             <>
               <GameControls />
-              <div className="shrink-0 max-h-[40%] overflow-y-auto">
-                <EnginePanel />
-              </div>
+              <LlmPanel />
+              {!llmGameActive && (
+                <div className="shrink-0 max-h-[40%] overflow-y-auto">
+                  <EnginePanel />
+                </div>
+              )}
 
               <div className="flex border-b border-[var(--border-color)]">
                 <button

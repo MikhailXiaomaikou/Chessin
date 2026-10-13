@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { useGameStore } from '@renderer/stores/gameStore'
 import { useEngineStore } from '@renderer/stores/engineStore'
+import { useLlmStore, type Seat } from '@renderer/stores/llmStore'
 import { useT } from '@renderer/i18n/useI18n'
+import LlmPlayersDialog from '@renderer/llm/LlmPlayersDialog'
+import { DEFAULT_FEN } from '@shared/constants'
 
 interface NewGameDialogProps {
   onClose: () => void
 }
 
-type GameMode = 'analysis' | 'vsEngine' | 'engineVsEngine'
+type GameMode = 'analysis' | 'llm' | 'vsEngine' | 'engineVsEngine'
 type PlayerColor = 'white' | 'black' | 'random'
 
 const TIME_CONTROLS = [
@@ -29,9 +32,27 @@ export default function NewGameDialog({ onClose }: NewGameDialogProps) {
   const [timeControl, setTimeControl] = useState(0)
   const newGame = useGameStore((s) => s.newGame)
   const engines = useEngineStore((s) => s.engines)
+  const llmPlayers = useLlmStore((s) => s.players)
+  const [whiteSeat, setWhiteSeat] = useState<string>('human')
+  const [blackSeat, setBlackSeat] = useState<string>(() => llmPlayers[0]?.id ?? 'human')
+  const [showPlayers, setShowPlayers] = useState(false)
+
+  const toSeat = (v: string): Seat =>
+    v !== 'human' && llmPlayers.some((p) => p.id === v) ? { kind: 'llm', playerId: v } : { kind: 'human' }
+  const white = toSeat(whiteSeat)
+  const black = toSeat(blackSeat)
+  const llmReady = white.kind === 'llm' || black.kind === 'llm'
 
   const handleStart = () => {
+    const llm = useLlmStore.getState()
     newGame()
+    if (mode === 'llm' && llmReady) {
+      llm.startMatch(white, black, DEFAULT_FEN)
+      // Put the human's pieces at the bottom.
+      useGameStore.setState({ orientation: white.kind === 'llm' && black.kind === 'human' ? 'black' : 'white' })
+    } else {
+      llm.endMatch()
+    }
     onClose()
   }
 
@@ -47,6 +68,7 @@ export default function NewGameDialog({ onClose }: NewGameDialogProps) {
           <div className="flex gap-1">
             {([
               { value: 'analysis' as const, label: t('newGame.analysis') },
+              { value: 'llm' as const, label: t('newGame.llm') },
               { value: 'vsEngine' as const, label: t('newGame.vsEngine') },
               { value: 'engineVsEngine' as const, label: t('newGame.engineVsEngine') }
             ]).map((opt) => (
@@ -57,6 +79,37 @@ export default function NewGameDialog({ onClose }: NewGameDialogProps) {
             ))}
           </div>
         </div>
+
+        {mode === 'llm' && (
+          <div className="mb-4">
+            {llmPlayers.length === 0 ? (
+              <p className="text-xs text-gray-500 italic mb-2">{t('newGame.noLlmPlayers')}</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {([
+                  { label: t('editor.white'), value: whiteSeat, set: setWhiteSeat },
+                  { label: t('editor.black'), value: blackSeat, set: setBlackSeat }
+                ]).map((seat) => (
+                  <div key={seat.label}>
+                    <label className="text-xs text-gray-400 mb-1 block">{seat.label}</label>
+                    <select value={seat.value} onChange={(e) => seat.set(e.target.value)}
+                      className="w-full bg-surface text-gray-200 text-xs p-2 rounded border border-[var(--border-color)]">
+                      <option value="human">{t('newGame.human')}</option>
+                      {llmPlayers.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowPlayers(true)}
+              className="text-xs text-accent hover:text-accent-hover transition-colors mb-2">
+              {t('newGame.managePlayers')}
+            </button>
+            <p className="text-xs text-gray-500">{t('newGame.noEngineRule')}</p>
+          </div>
+        )}
 
         {mode === 'vsEngine' && (
           <div className="mb-4">
@@ -91,7 +144,7 @@ export default function NewGameDialog({ onClose }: NewGameDialogProps) {
           </div>
         )}
 
-        {mode !== 'analysis' && (
+        {(mode === 'vsEngine' || mode === 'engineVsEngine') && (
           <div className="mb-4">
             <label className="text-xs text-gray-400 mb-1 block">{t('newGame.timeControl')}</label>
             <div className="grid grid-cols-3 gap-1">
@@ -110,12 +163,13 @@ export default function NewGameDialog({ onClose }: NewGameDialogProps) {
             className="px-4 py-2 text-xs rounded text-gray-400 hover:text-gray-200 transition-colors">
             {t('editor.cancel')}
           </button>
-          <button onClick={handleStart}
-            className="px-4 py-2 text-xs rounded bg-accent text-white hover:bg-accent-hover transition-colors font-medium">
+          <button onClick={handleStart} disabled={mode === 'llm' && !llmReady}
+            className="px-4 py-2 text-xs rounded bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium">
             {t('newGame.startGame')}
           </button>
         </div>
       </div>
+      {showPlayers && <LlmPlayersDialog onClose={() => setShowPlayers(false)} />}
     </div>
   )
 }

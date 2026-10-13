@@ -7,6 +7,7 @@ import { useGameStore } from '@renderer/stores/gameStore'
 import { useUIStore } from '@renderer/stores/uiStore'
 import { useEngineStore, ENGINE_COLORS } from '@renderer/stores/engineStore'
 import { useSounds } from '@renderer/board/hooks/useSounds'
+import { useLlmStore, seatFor } from '@renderer/stores/llmStore'
 import 'chessground/assets/chessground.base.css'
 import 'chessground/assets/chessground.brown.css'
 import 'chessground/assets/chessground.cburnett.css'
@@ -37,6 +38,18 @@ export default function ChessBoard() {
   const isAnalyzing = useEngineStore((s) => s.isAnalyzing)
 
   const playSound = useSounds()
+
+  // During an LLM game the board only accepts moves for a human seat, at the
+  // latest position, while the game is running.
+  const match = useLlmStore((s) => s.match)
+  const currentNodeId = useGameStore((s) => s.currentNodeId)
+  const treeNodes = useGameStore((s) => s.treeNodes)
+  const rootChildren = useGameStore((s) => s.rootChildren)
+  const atTip = (currentNodeId === null ? rootChildren : treeNodes[currentNodeId]?.children ?? []).length === 0
+  const boardLocked =
+    !!match &&
+    match.status !== 'finished' &&
+    (match.status !== 'running' || !atTip || seatFor(match, turn).kind !== 'human')
 
   const toDests = useCallback((): Map<Key, Key[]> => {
     const dests = getAllLegalDests()
@@ -129,15 +142,15 @@ export default function ChessBoard() {
       turnColor,
       movable: {
         free: false,
-        color: isGameOver ? undefined : turnColor,
-        dests: isGameOver ? new Map() : toDests(),
+        color: isGameOver || boardLocked ? undefined : turnColor,
+        dests: isGameOver || boardLocked ? new Map() : toDests(),
         showDests: showLegalMoves
       },
       lastMove: lastMove ? [lastMove.from as Key, lastMove.to as Key] : undefined,
       check: isCheck ? turnColor : undefined,
       coordinates: showCoordinates
     })
-  }, [fen, turn, isCheck, lastMove, isGameOver, showCoordinates, showLegalMoves, toDests])
+  }, [fen, turn, isCheck, lastMove, isGameOver, boardLocked, showCoordinates, showLegalMoves, toDests])
 
   // Sync orientation
   useEffect(() => {

@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import MainLayout from '@renderer/layout/MainLayout'
 import { useGameStore } from '@renderer/stores/gameStore'
 import { useUIStore } from '@renderer/stores/uiStore'
+import { useLlmStore } from '@renderer/stores/llmStore'
+import type { LlmChatRequest, LlmChatResponse } from '@shared/llm/types'
 
 declare global {
   interface Window {
@@ -46,6 +48,9 @@ declare global {
         getGame: (index: number) => Promise<{ pgn?: string } | null>
         getOpeningStats: (fen: string) => Promise<unknown[]>
       }
+      llm: {
+        chat: (req: LlmChatRequest) => Promise<LlmChatResponse>
+      }
       clipboard: {
         writeText: (text: string) => void
       }
@@ -78,7 +83,10 @@ export default function App() {
       window.electronAPI.onMenuEvent('menu:go-back', goBack),
       window.electronAPI.onMenuEvent('menu:go-forward', goForward),
       window.electronAPI.onMenuEvent('menu:go-end', goToEnd),
-      window.electronAPI.onMenuEvent('menu:new-game', () => newGame())
+      window.electronAPI.onMenuEvent('menu:new-game', () => {
+        useLlmStore.getState().endMatch()
+        newGame()
+      })
     ]
 
     return () => {
