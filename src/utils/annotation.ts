@@ -81,7 +81,7 @@ type AnnotationInfo = {
 };
 
 export const ANNOTATION_INFO: Record<Annotation, AnnotationInfo> = {
-    "": { name: "None", color: "gray", nag: 0 },
+    "": { name: "None", translationKey: "None", color: "gray", nag: 0 },
     "!!": {
         group: "basic",
         name: "Brilliant",
@@ -186,7 +186,7 @@ export const ANNOTATION_INFO: Record<Annotation, AnnotationInfo> = {
     "∆": { name: "With the idea", translationKey: "WithIdea", nag: 140 },
     "□": { name: "Only move", translationKey: "OnlyMove", nag: 7 },
     "⨀": { name: "Zugzwang", translationKey: "Zugzwang", nag: 22 },
-    "⊗": { name: "Miss", color: "red", nag: 9 },
+    "⊗": { name: "Miss", translationKey: "Miss", color: "red", nag: 9 },
 };
 
 export function isBasicAnnotation(

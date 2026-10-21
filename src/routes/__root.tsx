@@ -125,22 +125,22 @@ function RootLayout() {
     try {
       const update = await check();
       if (update) {
-        const yes = await ask("Do you want to install the new version now?", {
-          title: "New version available",
+        const yes = await ask(t("Updater.NewVersion.Message"), {
+          title: t("Updater.NewVersion.Title"),
         });
         if (yes) {
           await update.downloadAndInstall();
           await relaunch();
         }
       } else {
-        await message("No updates available");
+        await message(t("Updater.NoUpdates"));
       }
     } catch (e) {
       // Chessin: the updater has no endpoints until a release channel exists
       // (see src-tauri/README.chessin.md), so check() rejects instead of hanging.
-      await message(`Failed to check for updates: ${e}`);
+      await message(t("Updater.CheckFailed", { error: String(e) }));
     }
-  }, []);
+  }, [t]);
 
   const openSettings = useCallback(async () => {
     navigate({ to: "/settings" });
@@ -325,8 +325,8 @@ function RootLayout() {
             label: t("Menu.Help.ClearSavedData"),
             id: "clear_saved_data",
             action: () => {
-              ask("Are you sure you want to clear all saved data?", {
-                title: "Clear data",
+              ask(t("Menu.Help.ClearSavedData.Confirm"), {
+                title: t("Menu.Help.ClearSavedData.Title"),
               }).then((res) => {
                 if (res) {
                   localStorage.clear();
@@ -342,8 +342,8 @@ function RootLayout() {
             action: async () => {
               const path = await resolve(await appLogDir(), "en-croissant.log");
               notifications.show({
-                title: "Logs",
-                message: `Opened logs in ${path}`,
+                title: t("Menu.Help.OpenLogs.Title"),
+                message: t("Menu.Help.OpenLogs.Message", { path }),
               });
               await openPath(path);
             },

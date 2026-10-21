@@ -1,0 +1,301 @@
+# Chessin term base (X-7).
+#
+# Source: docs/chessbase-teardown.md, 附录 A (中英术语表). Principle: follow
+# Lichess zh-CN, because Chinese online players already know those words; never
+# borrow xiangqi or go vocabulary. Still a draft pending review by 5–8 Chinese
+# coaches and players.
+#
+# Fields
+#   id           stable identifier, used by the `Term` component and lint rules
+#   en           English term as used in en-US.json
+#   zh_hans      Simplified Chinese (zh-CN.json)
+#   zh_hant      Traditional Chinese (zh-TW.json); omitted when not yet settled
+#   chessbase_en ChessBase's name for the same thing, if it has one
+#   lichess_zh   the Lichess zh-CN word, if Lichess has the concept
+#   notes        rationale, collisions to avoid, open questions
+
+terms:
+  # --- move classification (report / annotation labels) ---------------------
+  - id: inaccuracy
+    en: Inaccuracy
+    zh_hans: 失准
+    zh_hant: 失準
+    lichess_zh: 失准
+    notes: >-
+      NAG $6 "?!" (En Croissant key Annotate.Dubious). The old prototype used
+      可疑着法; the report label must be 失准.
+
+  - id: mistake
+    en: Mistake
+    zh_hans: 错着
+    zh_hant: 錯著
+    lichess_zh: 错着
+    notes: >-
+      NAG $2 "?". The old prototype translated Mistake as 失误 and Blunder as
+      错着; both were wrong. 失误 is the generic word (see `error`), never a label.
+
+  - id: blunder
+    en: Blunder
+    zh_hans: 败着
+    zh_hant: 敗著
+    lichess_zh: 败着
+    notes: NAG $4 "??".
+
+  - id: error
+    en: Error
+    zh_hans: 失误
+    zh_hant: 失誤
+    notes: >-
+      Generic word only ("a mistake in the sense of a slip"). NOT a
+      classification label; the UI grades moves with 失准 / 错着 / 败着.
+
+  - id: book-move
+    en: Book move
+    zh_hans: 理论着法
+    zh_hant: 理論著手
+    notes: >-
+      The old prototype used 定式, which is go/xiangqi vocabulary. Not to be
+      confused with `opening-book` (the file).
+
+  # --- sources and containers ------------------------------------------------
+  - id: opening-explorer
+    en: Opening explorer
+    zh_hans: 开局探索器
+    zh_hant: 開局探索器
+    chessbase_en: Reference / LiveBook
+    lichess_zh: 开局探索器
+    notes: Position statistics from a source (Lichess Masters, local database).
+
+  - id: default-source
+    en: Default source
+    zh_hans: 默认来源
+    zh_hant: 預設來源
+    chessbase_en: Reference database (参考数据库)
+    notes: >-
+      Shown as a visible chip rather than a hidden flag (IA-3). En Croissant
+      still calls it the reference database (参考数据库) in the UI today.
+
+  - id: collection
+    en: Collection
+    zh_hans: 棋谱集
+    zh_hant: 棋譜集
+    chessbase_en: Database (数据库)
+    notes: >-
+      One database file. En Croissant's UI currently says 数据库; the rename
+      is part of the IA-3 object model, not X-7.
+
+  - id: library
+    en: Library
+    zh_hans: 棋谱库
+    zh_hant: 棋譜庫
+    chessbase_en: My Databases (我的数据库)
+    notes: The set of all the user's collections.
+
+  - id: repertoire
+    en: Repertoire
+    zh_hans: 开局体系
+    zh_hant: 開局體系
+    chessbase_en: Repertoire (开局体系库, a flag on games)
+    notes: >-
+      Never 开局库: that collides with `opening-book`. 开局谱 still to be A/B
+      tested against 开局体系.
+
+  - id: opening-book
+    en: Opening book
+    zh_hans: 开局书
+    zh_hant: 開局書
+    chessbase_en: Opening book (CTG)
+    notes: >-
+      A CTG/Polyglot file the engine or opponent plays from
+      (Board.Opponent.EnableOpeningBook). Not interchangeable with `repertoire`.
+
+  - id: topic
+    en: Topic
+    zh_hans: 主题
+    zh_hant: 主題
+    chessbase_en: Keys (分类键)
+    notes: Opening / ending / strategy / tactics classification keys.
+
+  - id: highlight
+    en: Highlight
+    zh_hans: 亮点
+    zh_hant: 亮點
+    chessbase_en: Medals (奖章)
+
+  - id: study
+    en: Study
+    zh_hans: 研习
+    zh_hant: 研習
+    lichess_zh: 研习
+    notes: Kept identical to Lichess so imports and exports read the same.
+
+  - id: cloud-analysis
+    en: Cloud analysis
+    zh_hans: 云分析
+    zh_hant: 雲端分析
+    lichess_zh: 云分析
+
+  - id: rating
+    en: Rating
+    zh_hans: 等级分
+    zh_hant: 等級分
+    lichess_zh: 等级分
+    notes: Also for ELO fields (Max ELO → 最高等级分).
+
+  - id: time-control
+    en: Time control
+    zh_hans: 时限
+    zh_hant: 時限
+    lichess_zh: 时间限制
+    notes: 时限 in compact UI, 时间限制 in prose.
+
+  - id: variation
+    en: Variation
+    zh_hans: 变着
+    zh_hant: 變化
+    lichess_zh: 变着
+    notes: >-
+      zh-TW keeps the existing 變化 convention of zh-TW.json. "Promote
+      variation" → 提升变着.
+
+  - id: main-line
+    en: Main line
+    zh_hans: 主线
+    zh_hant: 主線
+    lichess_zh: 主线
+    notes: '"Promote to main line" → 提升为主线 (Menu.PromoteToMainLine).'
+
+  - id: novelty
+    en: Novelty
+    zh_hans: 新着
+    zh_hant: 新著
+    lichess_zh: 创新着法
+    notes: >-
+      Chinese chess books and media say 新着; deliberately differs from Lichess
+      (创新着法). Confirm at review.
+
+  - id: mistake-notebook
+    en: Mistake notebook
+    zh_hans: 错题本
+    zh_hant: 錯題本
+    notes: Concept Chinese students already know from school.
+
+  # --- pieces and rules ------------------------------------------------------
+  - id: king
+    en: King
+    zh_hans: 王
+    zh_hant: 王
+    lichess_zh: 王
+    notes: Letter K; localized notation may show 王e1.
+
+  - id: queen
+    en: Queen
+    zh_hans: 后
+    zh_hant: 后
+    lichess_zh: 后
+    notes: Letter Q.
+
+  - id: rook
+    en: Rook
+    zh_hans: 车
+    zh_hant: 車
+    lichess_zh: 车
+    notes: Letter R.
+
+  - id: bishop
+    en: Bishop
+    zh_hans: 象
+    zh_hant: 象
+    lichess_zh: 象
+    notes: Letter B.
+
+  - id: knight
+    en: Knight
+    zh_hans: 马
+    zh_hant: 馬
+    lichess_zh: 马
+    notes: Letter N; localized notation may show 马f3.
+
+  - id: pawn
+    en: Pawn
+    zh_hans: 兵
+    zh_hant: 兵
+    lichess_zh: 兵
+    notes: Letter P (omitted in SAN).
+
+  - id: castling
+    en: Castling
+    zh_hans: 王车易位
+    zh_hant: 王車易位
+    lichess_zh: 王车易位
+
+  - id: en-passant
+    en: En passant
+    zh_hans: 吃过路兵
+    zh_hant: 吃過路兵
+    lichess_zh: 吃过路兵
+
+  - id: promotion
+    en: Promotion
+    zh_hans: 升变
+    zh_hant: 升變
+    lichess_zh: 升变
+
+  # --- tactics ---------------------------------------------------------------
+  - id: fork
+    en: Fork
+    zh_hans: 捉双
+    zh_hant: 捉雙
+    notes: Also 双重攻击 in prose.
+
+  - id: pin
+    en: Pin
+    zh_hans: 牵制
+    zh_hant: 牽制
+
+  - id: skewer
+    en: Skewer
+    zh_hans: 串击
+    zh_hant: 串擊
+
+  - id: discovered-attack
+    en: Discovered attack
+    zh_hans: 闪击
+    zh_hant: 閃擊
+
+  # --- pawn structure and squares --------------------------------------------
+  - id: iqp
+    en: Isolated queen's pawn
+    zh_hans: 孤兵
+    zh_hant: 孤兵
+    notes: IQP; 孤立后兵 when the d-file must be explicit.
+
+  - id: doubled-pawn
+    en: Doubled pawn
+    zh_hans: 叠兵
+    zh_hant: 疊兵
+
+  - id: passed-pawn
+    en: Passed pawn
+    zh_hans: 通路兵
+    zh_hant: 通路兵
+
+  - id: open-file
+    en: Open file
+    zh_hans: 开放线
+    zh_hant: 開放線
+
+  - id: half-open-file
+    en: Half-open file
+    zh_hans: 半开放线
+    zh_hant: 半開放線
+
+  - id: outpost
+    en: Outpost
+    zh_hans: 前哨
+    zh_hant: 前哨
+
+  - id: weak-square
+    en: Weak square
+    zh_hans: 弱格
+    zh_hant: 弱格

@@ -1,5 +1,6 @@
 import { notifications } from "@mantine/notifications";
 import { error } from "@tauri-apps/plugin-log";
+import i18n from "i18next";
 import { parsePGN } from "./chess";
 import { openFile } from "./files";
 import { getGameFromUrl } from "./import";
@@ -19,7 +20,7 @@ export async function openCommandLineFile(
     } catch (e) {
         error(`Failed to open command-line file: ${file} - ${e}`);
         notifications.show({
-            title: "Failed to open file",
+            title: i18n.t("Launch.OpenFileFailed"),
             message: e instanceof Error ? e.message : String(e),
             color: "red",
         });
@@ -40,12 +41,12 @@ export const handleDeepLink = async (
         if (url.host === "import") {
             const gameUrl = url.searchParams.get("url");
             if (!gameUrl) {
-                throw new Error("No URL parameter provided in chessin://import");
+                throw new Error(i18n.t("Launch.Import.NoUrl"));
             }
 
             notifications.show({
-                title: "Importing game",
-                message: `Loading game from ${gameUrl}...`,
+                title: i18n.t("Launch.Import.Importing"),
+                message: i18n.t("Launch.Import.Loading", { url: gameUrl }),
                 loading: true,
                 autoClose: false,
                 id: "importing-game-link",
@@ -54,7 +55,7 @@ export const handleDeepLink = async (
 
             const pgn = await getGameFromUrl(gameUrl);
             if (!pgn) {
-                throw new Error("No PGN data found");
+                throw new Error(i18n.t("Launch.Import.NoPGN"));
             }
 
             const tree = await parsePGN(pgn);
@@ -74,8 +75,8 @@ export const handleDeepLink = async (
 
             notifications.update({
                 id: "importing-game-link",
-                title: "Import successful",
-                message: "Game imported successfully",
+                title: i18n.t("Launch.Import.Success"),
+                message: i18n.t("Launch.Import.SuccessMessage"),
                 color: "green",
                 autoClose: 3000,
                 loading: false,
@@ -87,7 +88,7 @@ export const handleDeepLink = async (
         if (notificationShown) {
             notifications.update({
                 id: "importing-game-link",
-                title: "Import failed",
+                title: i18n.t("Launch.Import.Failed"),
                 message: errorMessage,
                 color: "red",
                 autoClose: 5000,
@@ -95,7 +96,7 @@ export const handleDeepLink = async (
             });
         } else {
             notifications.show({
-                title: "Import error",
+                title: i18n.t("Launch.Import.Error"),
                 message: errorMessage,
                 color: "red",
             });

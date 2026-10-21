@@ -1,4 +1,6 @@
 import dayjs from "dayjs";
+import "dayjs/locale/zh-cn";
+import "dayjs/locale/zh-tw";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import i18n from "i18next";
 import { createRoot } from "react-dom/client";
@@ -71,6 +73,22 @@ i18n
   });
 
 dayjs.extend(customParseFormat);
+
+// Chessin: relative dates and month names follow the UI language.
+const dayjsLocale = (lng: string | undefined) => {
+  switch (lng) {
+    case "zh-CN":
+      return "zh-cn";
+    case "zh-TW":
+      return "zh-tw";
+    default:
+      return "en";
+  }
+};
+dayjs.locale(dayjsLocale(i18n.resolvedLanguage ?? i18n.language));
+i18n.on("languageChanged", (lng) => {
+  dayjs.locale(dayjsLocale(i18n.resolvedLanguage ?? lng));
+});
 
 setAutoFreeze(false);
 

@@ -13,6 +13,7 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { getMatches } from "@tauri-apps/plugin-cli";
 import { listen } from "@tauri-apps/api/event";
 import { attachConsole, error, info, warn } from "@tauri-apps/plugin-log";
+import i18n from "i18next";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { ContextMenuProvider } from "mantine-contextmenu";
 import { useEffect, useRef } from "react";
@@ -120,8 +121,8 @@ const checkForUpdates = async () => {
   try {
     const update = await check();
     if (update) {
-      const yes = await ask("Do you want to install the new version now?", {
-        title: "New version available",
+      const yes = await ask(i18n.t("Updater.NewVersion.Message"), {
+        title: i18n.t("Updater.NewVersion.Title"),
       });
       if (yes) {
         await update.downloadAndInstall();
