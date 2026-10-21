@@ -22,12 +22,15 @@ import { match } from "ts-pattern";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { Chessground, type ChessgroundRef } from "@/chessground/Chessground";
+import { useBoardOrientation } from "@/chessin/board/orientationAtom";
+import "@/chessin/board/threatArrows.css";
 import {
   autoPromoteAtom,
   bestMovesFamily,
   currentEvalOpenAtom,
   currentShowCommentsAtom,
   currentTabAtom,
+  currentThreatAtom,
   deckAtomFamily,
   enableBoardScrollAtom,
   eraseDrawablesOnClickAtom,
@@ -104,7 +107,6 @@ function Board({
 
   const store = useContext(TreeStateContext)!;
 
-  const root = useStore(store, (s) => s.root);
   const rootFen = useStore(store, (s) => s.root.fen);
   const moves = useStore(
     store,
@@ -123,7 +125,6 @@ function Board({
   const goToNext = useStore(store, (s) => s.goToNext);
   const goToPrevious = useStore(store, (s) => s.goToPrevious);
   const storeMakeMove = useStore(store, (s) => s.makeMove);
-  const setHeaders = useStore(store, (s) => s.setHeaders);
   const clearShapes = useStore(store, (s) => s.clearShapes);
   const setShapes = useStore(store, (s) => s.setShapes);
   const setFen = useStore(store, (s) => s.setFen);
@@ -152,17 +153,17 @@ function Board({
   const [pendingMove, setPendingMove] = useState<NormalMove | null>(null);
 
   const turn = pos?.turn || "white";
-  const orientation = headers.orientation || "white";
-  const toggleOrientation = () =>
-    setHeaders({
-      ...headers,
-      fen: root.fen,
-      orientation: orientation === "black" ? "white" : "black",
-    });
+  const currentTab = useAtomValue(currentTabAtom);
+  // Orientation is view state (per tab, initialised from the Orientation
+  // header); flipping never writes headers, so it neither dirties the tab nor
+  // ends up in the PGN.
+  const [orientation, toggleOrientation] = useBoardOrientation(
+    currentTab?.value,
+    headers.orientation,
+  );
 
   const keyMap = useAtomValue(keyMapAtom);
   useHotkeys(keyMap.SWAP_ORIENTATION.keys, () => toggleOrientation());
-  const currentTab = useAtomValue(currentTabAtom);
   const tabFile = getTabFile(currentTab);
   const [evalOpen, setEvalOpen] = useAtom(currentEvalOpenAtom);
 
@@ -239,6 +240,8 @@ function Board({
     }
   }
 
+  const threat = useAtomValue(currentThreatAtom);
+
   let shapes: DrawShape[] = [];
   if (showArrows && evalOpen && arrows.size > 0 && pos) {
     const entries = Array.from(arrows.entries()).sort((a, b) => a[0] - b[0]);
@@ -277,7 +280,15 @@ function Board({
                 shapes.push({
                   orig: from,
                   dest: to,
-                  brush: j === 0 ? arrowColors[i].strong : arrowColors[i].pale,
+                  // Threat-mode PVs are the opponent's threats: dashed red
+                  // (see threatArrows.css) instead of the per-engine colour.
+                  brush: threat
+                    ? j === 0
+                      ? "threat"
+                      : "threatPale"
+                    : j === 0
+                      ? arrowColors[i].strong
+                      : arrowColors[i].pale,
                   modifiers: {
                     lineWidth: brushSize,
                   },
@@ -591,6 +602,20 @@ function Board({
                       key: "v",
                       color: "#9b59b6",
                       opacity: 0.8,
+                      lineWidth: 10,
+                    },
+                    // Threat-mode engine arrows; dashed via threatArrows.css,
+                    // which keys off the arrowhead marker id `arrowhead-<key>`.
+                    threat: {
+                      key: "threat",
+                      color: "#e03131",
+                      opacity: 0.9,
+                      lineWidth: 10,
+                    },
+                    threatPale: {
+                      key: "threatPale",
+                      color: "#e03131",
+                      opacity: 0.45,
                       lineWidth: 10,
                     },
                   } as unknown as DrawBrushes,

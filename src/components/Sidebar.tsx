@@ -23,15 +23,18 @@ interface NavbarLinkProps {
 
 function NavbarLink({ url, icon: Icon, label }: NavbarLinkProps) {
   const match = useMatchRoute();
+  const active = match({ to: url, fuzzy: true }) !== false;
   return (
-    <Tooltip label={label} position="right">
+    // Icon-only link: the translated name is the accessible name, and the
+    // tooltip also opens on keyboard focus so sighted keyboard users see it.
+    <Tooltip label={label} position="right" events={{ hover: true, focus: true, touch: false }}>
       <Link
         to={url}
-        className={cx(classes.link, {
-          [classes.active]: match({ to: url, fuzzy: true }) !== false,
-        })}
+        aria-label={label}
+        aria-current={active ? "page" : undefined}
+        className={cx(classes.link, { [classes.active]: active })}
       >
-        <Icon size="1.5rem" stroke={1.5} />
+        <Icon size="1.5rem" stroke={1.5} aria-hidden="true" />
       </Link>
     </Tooltip>
   );

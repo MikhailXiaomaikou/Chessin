@@ -17,7 +17,11 @@ import { useTranslation } from "react-i18next";
 import useSWRImmutable from "swr/immutable";
 import { match } from "ts-pattern";
 import type { Dirs } from "@/App";
+import { type Command, useRegisterCommands } from "@/chessin/commands/registry";
 import { DOCS_URL } from "@/chessin/config";
+import ChessinMounts from "@/chessin/shell/ChessinMounts";
+import { isFirstRunOpen } from "@/chessin/onboarding/firstRunState";
+import { StatusBar } from "@/chessin/shell/StatusBar";
 import AboutModal from "@/components/About";
 import { SideBar } from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
@@ -162,6 +166,27 @@ function RootLayout() {
     setShowTabBar((prev) => !prev);
   }, [setShowTabBar]);
 
+  const clearSavedData = useCallback(() => {
+    ask(t("Menu.Help.ClearSavedData.Confirm"), {
+      title: t("Menu.Help.ClearSavedData.Title"),
+    }).then((res) => {
+      if (res) {
+        localStorage.clear();
+        sessionStorage.clear();
+        location.reload();
+      }
+    });
+  }, [t]);
+
+  const openLogs = useCallback(async () => {
+    const path = await resolve(await appLogDir(), "en-croissant.log");
+    notifications.show({
+      title: t("Menu.Help.OpenLogs.Title"),
+      message: t("Menu.Help.OpenLogs.Message", { path }),
+    });
+    await openPath(path);
+  }, [t]);
+
   const [keyMap] = useAtom(keyMapAtom);
 
   useHotkeys(keyMap.NEW_TAB.keys, createNewTab);
@@ -169,6 +194,113 @@ function RootLayout() {
   useHotkeys(keyMap.TOGGLE_SIDEBAR.keys, toggleSidebar);
   useHotkeys(keyMap.TOGGLE_TAB_BAR.keys, toggleTabBar);
   const [opened, setOpened] = useState(false);
+
+  // Chessin: the menu actions above are also commands in the palette (mod+k).
+  const appCommands = useMemo<Command[]>(
+    () => [
+      {
+        id: "file.newTab",
+        section: "file",
+        title: () => t("Menu.File.NewTab"),
+        shortcutKey: "NEW_TAB",
+        aliases: ["new tab", "新建标签页", "新标签"],
+        run: createNewTab,
+      },
+      {
+        id: "file.openFile",
+        section: "file",
+        title: () => t("Menu.File.OpenFile"),
+        shortcutKey: "OPEN_FILE",
+        aliases: ["open file", "open pgn", "打开文件", "打开棋谱"],
+        run: openNewFile,
+      },
+      {
+        id: "view.toggleSidebar",
+        section: "view",
+        title: () => t("Menu.View.ToggleSidebar", { defaultValue: "Toggle Sidebar" }),
+        shortcutKey: "TOGGLE_SIDEBAR",
+        aliases: ["sidebar", "侧边栏", "侧栏"],
+        run: toggleSidebar,
+      },
+      {
+        id: "view.toggleTabBar",
+        section: "view",
+        title: () => t("Menu.View.ToggleTabBar", { defaultValue: "Toggle Tab Bar" }),
+        shortcutKey: "TOGGLE_TAB_BAR",
+        aliases: ["tab bar", "tabs", "标签栏"],
+        run: toggleTabBar,
+      },
+      {
+        id: "view.toggleFullscreen",
+        section: "view",
+        title: () => t("Menu.View.Fullscreen", { defaultValue: "Toggle Fullscreen" }),
+        aliases: ["fullscreen", "全屏"],
+        run: toggleFullscreen,
+      },
+      {
+        id: "view.reload",
+        section: "view",
+        title: () => t("Menu.View.Reload"),
+        aliases: ["reload", "refresh", "刷新", "重新加载"],
+        run: () => location.reload(),
+      },
+      {
+        id: "app.settings",
+        section: "app",
+        title: () => t("SideBar.Settings"),
+        aliases: ["settings", "preferences", "options", "设置", "偏好", "选项"],
+        run: openSettings,
+      },
+      {
+        id: "help.documentation",
+        section: "help",
+        title: () => t("Menu.Help.Documentation"),
+        aliases: ["docs", "documentation", "help", "文档", "帮助"],
+        run: () => openUrl(DOCS_URL),
+      },
+      {
+        id: "help.checkUpdates",
+        section: "help",
+        title: () => t("Menu.Help.CheckUpdate"),
+        aliases: ["update", "upgrade", "更新", "检查更新", "升级"],
+        run: checkForUpdates,
+      },
+      {
+        id: "help.openLogs",
+        section: "help",
+        title: () => t("Menu.Help.OpenLogs"),
+        aliases: ["logs", "log file", "日志"],
+        run: openLogs,
+      },
+      {
+        id: "help.clearSavedData",
+        section: "help",
+        title: () => t("Menu.Help.ClearSavedData"),
+        aliases: ["clear data", "reset", "清除数据", "重置"],
+        run: clearSavedData,
+      },
+      {
+        id: "help.about",
+        section: "help",
+        title: () => t("Menu.Help.About"),
+        aliases: ["about", "version", "关于", "版本"],
+        run: () => setOpened(true),
+      },
+    ],
+    [
+      t,
+      createNewTab,
+      openNewFile,
+      toggleSidebar,
+      toggleTabBar,
+      toggleFullscreen,
+      openSettings,
+      checkForUpdates,
+      openLogs,
+      clearSavedData,
+    ],
+  );
+  useRegisterCommands(appCommands);
 
   const isMacOS = platform() === "macos";
 
@@ -324,29 +456,12 @@ function RootLayout() {
           {
             label: t("Menu.Help.ClearSavedData"),
             id: "clear_saved_data",
-            action: () => {
-              ask(t("Menu.Help.ClearSavedData.Confirm"), {
-                title: t("Menu.Help.ClearSavedData.Title"),
-              }).then((res) => {
-                if (res) {
-                  localStorage.clear();
-                  sessionStorage.clear();
-                  location.reload();
-                }
-              });
-            },
+            action: clearSavedData,
           },
           {
             label: t("Menu.Help.OpenLogs"),
             id: "logs",
-            action: async () => {
-              const path = await resolve(await appLogDir(), "en-croissant.log");
-              notifications.show({
-                title: t("Menu.Help.OpenLogs.Title"),
-                message: t("Menu.Help.OpenLogs.Message", { path }),
-              });
-              await openPath(path);
-            },
+            action: openLogs,
           },
           { label: "divider" },
           ...(!isMacOS ? [checkForUpdatesOption, aboutOption] : []),
@@ -356,8 +471,10 @@ function RootLayout() {
     [
       t,
       checkForUpdates,
+      clearSavedData,
       createNewTab,
       keyMap,
+      openLogs,
       openNewFile,
       toggleFullscreen,
       toggleSidebar,
@@ -384,7 +501,7 @@ function RootLayout() {
   useEffect(() => {
     const unlisten = getCurrentWindow().listen(TauriEvent.DRAG_DROP, (event) => {
       const payload = event.payload as { paths: string[] };
-      if (payload?.paths) {
+      if (payload?.paths && !isFirstRunOpen()) {
         const pgnFiles = payload.paths.filter((path) => path.toLowerCase().endsWith(".pgn"));
 
         if (pgnFiles.length > 0) {
@@ -419,14 +536,15 @@ function RootLayout() {
               height: "2.25rem",
             }
       }
+      footer={{ height: "1.5rem" }}
       styles={{
         main: {
           height: "100vh",
-          userSelect: "none",
         },
       }}
     >
       <AboutModal opened={opened} setOpened={setOpened} />
+      <ChessinMounts />
       {!isNative &&
         (import.meta.env.VITE_PLATFORM === "win32" ||
           import.meta.env.VITE_PLATFORM === "linux") && (
@@ -442,6 +560,9 @@ function RootLayout() {
       <AppShell.Main>
         <Outlet />
       </AppShell.Main>
+      <AppShell.Footer>
+        <StatusBar />
+      </AppShell.Footer>
     </AppShell>
   );
 }

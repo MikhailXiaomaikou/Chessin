@@ -1,6 +1,7 @@
 import {
   Accordion,
   ActionIcon,
+  Badge,
   Box,
   Code,
   Collapse,
@@ -181,10 +182,11 @@ function BestMovesComponent({
             enabled={settings.enabled}
             progress={progress}
             error={error}
+            threat={threat}
           />
         </Accordion.Control>
         <ActionIcon.Group>
-          <Tooltip label="Check the opponent's threat">
+          <Tooltip label={t("Threat.Toggle")}>
             <ActionIcon
               size="lg"
               onClick={() => setThreat(!threat)}
@@ -329,6 +331,7 @@ function EngineTop({
   enabled,
   progress,
   error,
+  threat,
 }: {
   name: string;
   engineVariations: BestMoves[] | undefined;
@@ -336,6 +339,7 @@ function EngineTop({
   enabled: boolean;
   progress: number;
   error: any;
+  threat: boolean;
 }) {
   const { t } = useTranslation();
   const isComputed = engineVariations && engineVariations.length > 0;
@@ -349,6 +353,11 @@ function EngineTop({
         <Text fw="bold" fz="lg" lineClamp={1}>
           {name}
         </Text>
+        {threat && (
+          <Badge size="xs" color="red" variant="light" style={{ flexShrink: 0 }}>
+            {t("Threat.Badge")}
+          </Badge>
+        )}
         {enabled && !isGameOver && !error && !engineVariations && (
           <Code fz="xs">{t("Common.Loading")}</Code>
         )}

@@ -1,9 +1,23 @@
 import { parseUci } from "chessops";
 import { beforeEach, expect, test } from "vitest";
 import { createTreeStore } from "@/state/store/tree";
-import { defaultTree, type TreeState } from "@/utils/treeReducer";
+import { defaultTree as baseDefaultTree, type TreeNode, type TreeState } from "@/utils/treeReducer";
 
 const store = createTreeStore();
+
+// Node ids are random; the literals below use "" and `getNewState` blanks the
+// store's ids so the structural comparisons stay id-blind.
+const defaultTree = (fen?: string): TreeState => {
+    const tree = baseDefaultTree(fen);
+    tree.root.id = "";
+    return tree;
+};
+
+const blankIds = (node: TreeNode): TreeNode => ({
+    ...node,
+    id: "",
+    children: node.children.map(blankIds),
+});
 
 beforeEach(() => {
     store.setState(defaultTree());
@@ -15,16 +29,19 @@ const treeE4D5: () => TreeState = () => ({
     ...defaultTree(),
     position: [0, 0],
     root: {
+        id: "",
         fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         move: null,
         san: null,
         children: [
             {
+                id: "",
                 fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
                 move: e4,
                 san: "e4",
                 children: [
                     {
+                        id: "",
                         fen: "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
                         move: d5,
                         san: "d5",
@@ -63,16 +80,19 @@ const treeE4D5Nf3: () => TreeState = () => ({
     ...defaultTree(),
     position: [0, 0],
     root: {
+        id: "",
         fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         move: null,
         san: null,
         children: [
             {
+                id: "",
                 fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
                 move: e4,
                 san: "e4",
                 children: [
                     {
+                        id: "",
                         fen: "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
                         move: d5,
                         san: "d5",
@@ -95,6 +115,7 @@ const treeE4D5Nf3: () => TreeState = () => ({
                 comment: "",
             },
             {
+                id: "",
                 fen: "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1",
                 move: parseUci("g1f3")!,
                 san: "Nf3",
@@ -123,7 +144,7 @@ const treeE4D5Nf3: () => TreeState = () => ({
 const getNewState = () => {
     const s = store.getState();
     return {
-        root: s.root,
+        root: blankIds(s.root),
         position: s.position,
         headers: s.headers,
         dirty: s.dirty,
@@ -190,6 +211,7 @@ test("should handle makeMove", () => {
             ...defaultTree().root,
             children: [
                 {
+                    id: "",
                     fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
                     move: e4,
                     san: "e4",
@@ -343,6 +365,7 @@ test("should handle setFen", () => {
         dirty: true,
         root: {
             ...defaultTree().root,
+            id: "",
             fen: "rnbq1bnr/ppppkppp/8/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w - - 2 3",
         },
     });

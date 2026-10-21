@@ -118,6 +118,7 @@ function EngineListener({
 }) {
   const store = useContext(TreeStateContext)!;
   const setScore = useStore(store, (s) => s.setScore);
+  const position = useStore(store, (s) => s.position);
   const activeTab = useAtomValue(activeTabAtom);
 
   const [, setProgress] = useAtom(engineProgressFamily({ engine: engine.id, tab: activeTab! }));
@@ -155,10 +156,16 @@ function EngineListener({
             return newMap;
           });
           setProgress(payload.progress);
+          // Threat mode analyses the null-move position ("what does the
+          // opponent threaten"); that score is not this node's evaluation, so
+          // it is kept for the arrows/engine card only and never written to
+          // the tree.
           const shouldSetScore =
-            firstEngineWithLines === engine.id || firstEngineWithLines === null;
+            !threat && (firstEngineWithLines === engine.id || firstEngineWithLines === null);
           if (shouldSetScore) {
-            setScore(ev[0].score);
+            // Live engine output is transient: it must not mark the tab dirty
+            // (autosave at up to 5 Hz) nor enter the undo history.
+            setScore(position, ev[0].score, { transient: true });
           }
         });
       }
@@ -169,6 +176,8 @@ function EngineListener({
   }, [
     activeTab,
     setScore,
+    position,
+    threat,
     settings.enabled,
     isGameOver,
     searchingFen,

@@ -38,13 +38,95 @@ cg-board square.oc.move-dest:hover {
   border-radius: 0;
 }
 
-* {
-  user-select: none;
-  -webkit-user-select: none;
+/*
+ * Chessin accessibility basics (plan X-9, S1).
+ *
+ * En Croissant shipped `* { user-select: none }` and `:focus { outline: none }`,
+ * which removed every focus ring and made all text unselectable. Instead:
+ *  - keyboard focus gets a 2px ring in the theme's primary colour (same shape
+ *    as Mantine's own `.mantine-focus-auto`), mouse focus stays ring-less;
+ *  - text-like content opts IN to selection at zero specificity (`:where`),
+ *    so any component can still override it, and the board / drag chrome opt
+ *    OUT at normal specificity.
+ */
+
+:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
 }
 
-:focus {
+/* Beats `all: unset` resets (e.g. the move cells) without beating Mantine's own ring classes. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
   outline: none;
+}
+
+/* Selectable text: notation, comments, inputs, code, tables, modals. */
+:where(
+  input,
+  textarea,
+  [contenteditable],
+  .ProseMirror,
+  p,
+  li,
+  pre,
+  code,
+  blockquote,
+  .mantine-Text-root,
+  .mantine-Title-root,
+  .mantine-Typography-root,
+  .mantine-Code-root,
+  .mantine-Table-root td,
+  .mantine-Table-root th,
+  .mantine-Notification-description,
+  .mantine-Notification-title,
+  [data-chessin-selectable]
+) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Never selectable: the board, pieces being dragged, drag handles and the window drag region. */
+.cg-wrap,
+cg-container,
+cg-board,
+.react-draggable,
+.react-draggable *,
+[data-rfd-drag-handle-draggable-id],
+[data-rfd-drag-handle-draggable-id] *,
+[data-tauri-drag-region],
+[data-tauri-drag-region] *,
+.mantine-Tabs-tab,
+.mantine-Tabs-tab *,
+.mantine-Button-root,
+.mantine-Button-root *,
+.mantine-ActionIcon-root,
+.mantine-ActionIcon-root *,
+.mantine-Badge-root,
+.mantine-Badge-root *,
+.mantine-Switch-root,
+.mantine-Switch-root *,
+.mantine-Checkbox-root,
+.mantine-Checkbox-root *,
+.mantine-Menu-item,
+.mantine-Menu-item *,
+.mantine-NavLink-root,
+.mantine-NavLink-root *,
+.mantine-SegmentedControl-root,
+.mantine-SegmentedControl-root *,
+.mantine-Tooltip-tooltip,
+.mantine-Tooltip-tooltip * {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 html,

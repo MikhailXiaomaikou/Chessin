@@ -1,0 +1,11 @@
+/*
+ * Threat-mode engine arrows (chessground brushes "threat" / "threatPale",
+ * registered in src/components/boards/Board.tsx) are dashed so they read as
+ * "what the opponent threatens", not as a move suggestion.
+ * chessground draws shapes in a viewBox measured in board squares, so the
+ * dash lengths below are fractions of a square.
+ */
+.cg-wrap svg.cg-shapes line[marker-end="url(#arrowhead-threat)"],
+.cg-wrap svg.cg-shapes line[marker-end="url(#arrowhead-threatPale)"] {
+  stroke-dasharray: 0.32 0.32;
+}

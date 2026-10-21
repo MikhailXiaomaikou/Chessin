@@ -4,19 +4,23 @@ import type { SyncStorage, SyncStringStorage } from "jotai/vanilla/utils/atomWit
 
 const meta = platform() === "macos" ? "cmd" : "ctrl";
 
-type Keybind = {
+export type Keybind = {
     name: string;
     keys: string;
 };
 
-type KeyMap = { [key: string]: Keybind };
+export type KeyMap = { [key: string]: Keybind };
 
 const keys: KeyMap = {
     NEW_TAB: { name: "New tab", keys: `${meta}+t` },
     CLOSE_TAB: { name: "Close tab", keys: `${meta}+w` },
     OPEN_FILE: { name: "Open File", keys: `${meta}+o` },
     SAVE_FILE: { name: "Save File", keys: `${meta}+s` },
-    COPY_PGN: { name: "Copy PGN", keys: `${meta}+k` },
+    COPY_PGN: { name: "Copy PGN", keys: `${meta}+shift+c` },
+    COMMAND_PALETTE: { name: "Command palette", keys: `${meta}+k` },
+    UNDO: { name: "Undo", keys: `${meta}+z` },
+    REDO: { name: "Redo", keys: `${meta}+shift+z` },
+    KEYBOARD_SHORTCUTS: { name: "Keyboard shortcuts", keys: "shift+?" },
     SWAP_ORIENTATION: { name: "Swap orientation", keys: "f" },
     CLEAR_SHAPES: { name: "Clear shapes", keys: "ctrl+l" },
     NEXT_MOVE: { name: "Next move", keys: "arrowright" },
@@ -56,7 +60,16 @@ const keys: KeyMap = {
     PREVIOUS_GAME: { name: "Previous game", keys: "pageup" },
     NEXT_GAME: { name: "Next game", keys: "pagedown" },
     TOGGLE_SIDEBAR: { name: "Toggle Sidebar", keys: `${meta}+shift+b` },
-    TOGGLE_TAB_BAR: { name: "Toggle Tab Bar", keys: `${meta}+shift+t` },
+    // Chessin: moved off `mod+shift+t` (reserved for "reopen tab"); `mod+shift+b` is the sidebar.
+    TOGGLE_TAB_BAR: { name: "Toggle Tab Bar", keys: `${meta}+shift+h` },
+};
+
+// Chessin: defaults that changed since the keymap was first persisted. A stored
+// binding that still equals an old default is migrated to the new default so
+// existing users do not keep `mod+k` on "Copy PGN" after it became the palette.
+const legacyDefaults: { [key: string]: string[] } = {
+    COPY_PGN: [`${meta}+k`],
+    TOGGLE_TAB_BAR: [`${meta}+shift+t`, `${meta}+shift+b`],
 };
 
 export const keyMapAtom = atomWithStorage("keybinds", keys, defaultStorage(keys, localStorage));
@@ -72,6 +85,8 @@ function defaultStorage(defaults: KeyMap, storage: SyncStringStorage): SyncStora
             for (const key in defaults) {
                 if (!(key in parsed)) {
                     parsed[key] = defaults[key];
+                } else if (legacyDefaults[key]?.includes(parsed[key].keys)) {
+                    parsed[key] = { ...parsed[key], keys: defaults[key].keys };
                 }
             }
             return parsed;

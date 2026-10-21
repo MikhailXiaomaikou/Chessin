@@ -6,8 +6,9 @@ import { memo, useContext, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { commands, type GoMode } from "@/bindings";
+import { tabLocalPathAtomFamily } from "@/chessin/sources/sources";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
-import { enginesAtom, referenceDbAtom } from "@/state/atoms";
+import { enginesAtom } from "@/state/atoms";
 import type { LocalEngine } from "@/utils/engines";
 
 const reportSettingsAtom = atomWithStorage("report-settings", {
@@ -35,7 +36,11 @@ function ReportModal({
 }) {
   const { t } = useTranslation();
 
-  const referenceDb = useAtomValue(referenceDbAtom);
+  // Chessin: novelties are checked against the tab's local source, else the
+  // default source when that is local. Without one the option is disabled with
+  // a hint instead of failing validation.
+  const referenceDb = useAtomValue(tabLocalPathAtomFamily(tab));
+  const canDetectNovelties = referenceDb !== null;
   const engines = useAtomValue(enginesAtom);
   const localEngines = useMemo(
     () => (engines ?? []).filter((e): e is LocalEngine => e.type === "local"),
@@ -51,9 +56,6 @@ function ReportModal({
     validate: {
       engine: (value) => {
         if (!value) return t("Board.Analysis.EngineRequired");
-      },
-      novelty: (value) => {
-        if (value && !referenceDb) return t("Board.Analysis.RefDBRequired");
       },
     },
   });
@@ -85,7 +87,7 @@ function ReportModal({
         engine?.path ?? "",
         form.values.goMode,
         {
-          annotateNovelties: form.values.novelty,
+          annotateNovelties: form.values.novelty && canDetectNovelties,
           fen: initialFen,
           referenceDb,
           reversed: form.values.reversed,
@@ -165,8 +167,14 @@ function ReportModal({
 
           <Checkbox
             label={t("Board.Analysis.AnnotateNovelties")}
-            description={t("Board.Analysis.AnnotateNovelties.Desc")}
+            description={
+              canDetectNovelties
+                ? t("Board.Analysis.AnnotateNovelties.Desc")
+                : t("Sources.NoveltyNeedsLocal")
+            }
+            disabled={!canDetectNovelties}
             {...form.getInputProps("novelty", { type: "checkbox" })}
+            checked={form.values.novelty && canDetectNovelties}
           />
 
           <Checkbox

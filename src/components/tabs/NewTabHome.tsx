@@ -31,6 +31,7 @@ import classes from "./NewTabHome.module.css";
 import {
   IconChess,
   IconClock,
+  IconDatabaseImport,
   IconFileImport,
   IconPuzzle,
   IconTarget,
@@ -41,6 +42,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
+import { openFirstRun } from "@/chessin/onboarding/firstRunState";
 import { getStats } from "@/components/files/opening";
 import Chessboard from "../icons/Chessboard";
 import { FileIcon } from "@/components/files/FileIcon";
@@ -179,6 +181,15 @@ export default function NewTabHome({ id }: { id: string }) {
 
   const cards = [
     {
+      icon: <IconDatabaseImport size={60} />,
+      title: t("FirstRun.Card.Title"),
+      description: t("FirstRun.Card.Desc"),
+      label: t("FirstRun.Card.Button"),
+      onClick: () => {
+        openFirstRun();
+      },
+    },
+    {
       icon: <IconChess size={60} />,
       title: t("Home.Card.PlayChess.Title"),
       description: t("Home.Card.PlayChess.Desc"),
@@ -253,7 +264,7 @@ export default function NewTabHome({ id }: { id: string }) {
       />
       <CreateRepertoireModal opened={openRepertoireModal} setOpened={setOpenRepertoireModal} />
       <Stack gap="lg" pt="sm">
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 5 }}>
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
           {cards.map((card) => (
             <Card shadow="sm" p="lg" radius="md" withBorder key={card.title}>
               <Stack align="center" h="100%" justify="space-between">

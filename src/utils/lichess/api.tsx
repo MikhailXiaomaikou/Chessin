@@ -7,6 +7,8 @@ import { error } from "@tauri-apps/plugin-log";
 import { parseUci } from "chessops";
 import { makeFen } from "chessops/fen";
 import { makeSan } from "chessops/san";
+import i18n from "i18next";
+import { getDefaultStore } from "jotai";
 import { match, P } from "ts-pattern";
 import {
   type BestMoves,
@@ -15,6 +17,17 @@ import {
   type GoMode,
   type NormalizedGame,
 } from "@/bindings";
+import { offlineModeAtom } from "@/chessin/shell/offlineAtom";
+import {
+  isOfflineError,
+  isRateLimitError,
+  isStaleRequestError,
+  lichessQueue,
+  OfflineError,
+  RateLimitError,
+  type RequestQueue,
+  tablebaseQueue,
+} from "@/chessin/sources/lichessQueue";
 import { parsePGN, uciNormalize } from "@/utils/chess";
 import { positionFromFen } from "@/utils/chessops";
 import { apiHeaders } from "@/utils/http";
@@ -32,6 +45,65 @@ const explorerURL = "https://explorer.lichess.org";
 const tablebaseURL = "https://tablebase.lichess.org";
 
 export const MIN_DATE = new Date(1952, 0, 1);
+
+/** Default queue lane for explorer requests when the caller has no tab id. */
+export const EXPLORER_LANE = "explorer";
+const CLOUD_EVAL_LANE = "cloud-eval";
+const TABLEBASE_LANE = "tablebase";
+
+/**
+ * Chessin: outbound traffic is off while offline mode is on. The atom is
+ * hydrated when the status bar mounts; before that read what it persisted.
+ */
+function isOffline(): boolean {
+  try {
+    if (getDefaultStore().get(offlineModeAtom)) return true;
+    return localStorage.getItem("chessin.offline") === "true";
+  } catch {
+    return false;
+  }
+}
+
+type QueuedFetchOptions = {
+  /** Lane of the serial queue; a `supersede` request replaces older ones of its lane. */
+  lane?: string | null;
+  supersede?: boolean;
+  queue?: RequestQueue;
+  init?: RequestInit;
+};
+
+/**
+ * Fetch through the serial Lichess queue (one request at a time, 429 → wait
+ * 60 s and retry once). Returns null in offline mode without touching the
+ * network; throws `RateLimitError` when the retry is throttled too and
+ * `StaleRequestError` when a newer request of the same lane replaced this one.
+ */
+async function queuedFetch(
+  url: string,
+  { lane = null, supersede = false, queue = lichessQueue, init }: QueuedFetchOptions = {},
+): Promise<Response | null> {
+  if (isOffline()) return null;
+  let res: Response;
+  try {
+    res = await queue.enqueue(
+      lane,
+      (signal) => {
+        if (isOffline()) throw new OfflineError();
+        return fetch(url, { ...init, signal });
+      },
+      { supersede },
+    );
+  } catch (e) {
+    if (isOfflineError(e)) return null;
+    throw e;
+  }
+  if (res.status === 429) throw new RateLimitError();
+  return res;
+}
+
+function bearer(token?: string): Record<string, string> | undefined {
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
+}
 
 export type TablebaseCategory =
   | "win"
@@ -165,10 +237,19 @@ type PositionGames = {
   month: string;
 }[];
 
-export async function convertToNormalized(data: PositionGames): Promise<NormalizedGame[]> {
+/**
+ * Downloads the PGN of each explorer game and normalises it. Exports go
+ * through the queue on `lane` (one at a time); if a newer request of that
+ * lane supersedes them, or offline mode kicks in, the whole batch rejects so
+ * callers never cache a partial result.
+ */
+export async function convertToNormalized(
+  data: PositionGames,
+  { lane, masters = false }: { lane?: string; masters?: boolean } = {},
+): Promise<NormalizedGame[]> {
   const results = await Promise.allSettled(
     data.map(async (game, i) => {
-      const pgn = await getLichessGame(game.id);
+      const pgn = await getLichessGame(game.id, { masters, lane });
       const { headers, root } = await parsePGN(pgn);
       const normalized: NormalizedGame = {
         ...headers,
@@ -179,11 +260,15 @@ export async function convertToNormalized(data: PositionGames): Promise<Normaliz
         site_id: 0,
         moves: pgn,
         ply_count: countMainPly(root),
-        // ply_count: root,
       };
       return normalized;
     }),
   );
+  for (const r of results) {
+    if (r.status === "rejected" && (isStaleRequestError(r.reason) || isOfflineError(r.reason))) {
+      throw r.reason;
+    }
+  }
   return results
     .filter((r) => r.status === "fulfilled")
     .map((r) => (r as PromiseFulfilledResult<NormalizedGame>).value);
@@ -212,6 +297,14 @@ export async function getLichessAccount({
   token?: string;
   username?: string;
 }): Promise<LichessAccount | null> {
+  if (isOffline()) {
+    notifications.show({
+      title: "Lichess",
+      message: i18n.t("Sources.Offline"),
+      color: "gray",
+    });
+    return null;
+  }
   let response: Response;
   if (token) {
     response = await fetch(`${baseURL}/account`, {
@@ -251,10 +344,18 @@ export async function getBestMoves(
     }
     pos.play(m);
   }
-  const data = await getCloudEvaluation(
-    makeFen(pos.toSetup()),
-    Number.parseInt(options.extraOptions.find((o) => o.name === "MultiPV")?.value ?? "1"),
-  );
+  let data: LichessCloudData | null;
+  try {
+    data = await getCloudEvaluation(
+      makeFen(pos.toSetup()),
+      Number.parseInt(options.extraOptions.find((o) => o.name === "MultiPV")?.value ?? "1"),
+    );
+  } catch (e) {
+    // Superseded by a newer position, or throttled: nothing to show for this one.
+    if (isStaleRequestError(e) || isRateLimitError(e)) return null;
+    throw e;
+  }
+  if (!data) return null;
   return [
     100,
     data.pvs?.map((m, i) => {
@@ -305,77 +406,91 @@ type LichessMate = {
   moves: string;
 };
 
-async function getCloudEvaluation(fen: string, multipv: number): Promise<LichessCloudData> {
-  if (cache.has(`${fen}-${multipv}`)) {
-    return cache.get(`${fen}-${multipv}`)!;
+async function getCloudEvaluation(fen: string, multipv: number): Promise<LichessCloudData | null> {
+  const cacheKey = `${fen}-${multipv}`;
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey)!;
   }
   const url = new URL(`${baseURL}/cloud-eval`);
   url.searchParams.append("fen", fen);
   url.searchParams.append("multiPv", multipv.toString());
 
-  const response = await fetch(url.toString(), { headers: apiHeaders() });
+  const response = await queuedFetch(url.toString(), {
+    lane: CLOUD_EVAL_LANE,
+    supersede: true,
+    init: { headers: apiHeaders() },
+  });
+  if (!response) return null;
   const data = (await response.json()) as LichessCloudData;
-  cache.set(`${fen}-${multipv}`, data);
+  cache.set(cacheKey, data);
   return data;
 }
 
+/**
+ * Lichess games explorer. No login needed; a token only raises the rate
+ * limit. Returns null in offline mode. `lane` (usually the tab id) lets a
+ * newer request for the same tab replace this one.
+ */
 export async function getLichessGames(
   fen: string,
   options: LichessGamesOptions,
   token?: string,
-): Promise<PositionData> {
+  lane: string = EXPLORER_LANE,
+): Promise<PositionData | null> {
   const url = match(options.player)
     .with(
       P.union(undefined, ""),
       () => `${explorerURL}/lichess?${getLichessGamesQueryParams(fen, options)}`,
     )
     .otherwise(() => `${explorerURL}/player?${getLichessGamesQueryParams(fen, options)}`);
-  const res = await fetch(url, {
-    headers: apiHeaders(
-      token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : undefined,
-    ),
+  const res = await queuedFetch(url, {
+    lane,
+    supersede: true,
+    init: { headers: apiHeaders(bearer(token)) },
   });
+  if (!res) return null;
   if (!res.ok) {
     throw new Error(`Failed to fetch Lichess games: ${res.status} ${res.statusText}`);
   }
   return await res.json();
 }
 
+/** Lichess Masters explorer; anonymous. See `getLichessGames`. */
 export async function getMasterGames(
   fen: string,
   options: MasterGamesOptions,
   token?: string,
-): Promise<PositionData> {
+  lane: string = EXPLORER_LANE,
+): Promise<PositionData | null> {
   const url = `${explorerURL}/masters?${getMasterGamesQueryParams(fen, options)}`;
-  const res = await fetch(url, {
-    headers: apiHeaders(
-      token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : undefined,
-    ),
+  const res = await queuedFetch(url, {
+    lane,
+    supersede: true,
+    init: { headers: apiHeaders(bearer(token)) },
   });
+  if (!res) return null;
   if (!res.ok) {
     throw new Error(`Failed to fetch master games: ${res.status} ${res.statusText}`);
   }
   return await res.json();
 }
 
-export async function getPlayerGames(fen: string, player: string, color: Color, token?: string) {
-  const res = await fetch(`${explorerURL}/player?fen=${fen}&player=${player}&color=${color}`, {
-    headers: apiHeaders(
-      token
-        ? {
-            Authorization: `Bearer ${token}`,
-          }
-        : undefined,
-    ),
-  });
+export async function getPlayerGames(
+  fen: string,
+  player: string,
+  color: Color,
+  token?: string,
+  lane: string = EXPLORER_LANE,
+) {
+  const res = await queuedFetch(
+    `${explorerURL}/player?fen=${fen}&player=${player}&color=${color}`,
+    {
+      lane,
+      supersede: true,
+      init: { headers: apiHeaders(bearer(token)) },
+    },
+  );
+  if (!res) return null;
   if (!res.ok) {
     throw new Error(`Failed to fetch player games: ${res.status} ${res.statusText}`);
   }
@@ -406,18 +521,35 @@ export async function downloadLichess(
   );
 }
 
-export async function getLichessGame(gameId: string): Promise<string> {
-  const response = await fetch(`https://lichess.org/game/export/${gameId.slice(0, 8)}`);
+/**
+ * PGN of one game. Masters explorer ids are served by the explorer
+ * (`/masters/pgn/{id}`), not by lichess.org's game export.
+ */
+export async function getLichessGame(
+  gameId: string,
+  { masters = false, lane = null }: { masters?: boolean; lane?: string | null } = {},
+): Promise<string> {
+  const url = masters
+    ? `${explorerURL}/masters/pgn/${gameId}`
+    : `https://lichess.org/game/export/${gameId.slice(0, 8)}`;
+  const response = await queuedFetch(url, { lane, init: { headers: apiHeaders() } });
+  if (!response) {
+    throw new OfflineError();
+  }
   if (!response.ok) {
     throw new Error(`Failed to load lichess game ${gameId} - ${response.statusText}`);
   }
   return await response.text();
 }
 
-export async function getTablebaseInfo(fen: string): Promise<TablebaseData> {
-  const res = await fetch(`${tablebaseURL}/standard?fen=${fen}`, {
-    headers: apiHeaders(),
+/** Returns null in offline mode. */
+export async function getTablebaseInfo(fen: string): Promise<TablebaseData | null> {
+  const res = await queuedFetch(`${tablebaseURL}/standard?fen=${fen}`, {
+    lane: TABLEBASE_LANE,
+    queue: tablebaseQueue,
+    init: { headers: apiHeaders() },
   });
+  if (!res) return null;
   if (!res.ok) {
     throw new Error(`Failed to load tablebase info for ${fen}.`);
   }
@@ -425,6 +557,9 @@ export async function getTablebaseInfo(fen: string): Promise<TablebaseData> {
 }
 
 export async function getFidePlayer(query: string) {
+  if (isOffline()) {
+    throw new Error(i18n.t("Sources.Offline"));
+  }
   if (!Number.isNaN(Number(query))) {
     const res = await fetch(`${baseURL}/fide/player/${query}`, {
       headers: apiHeaders({

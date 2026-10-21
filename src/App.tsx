@@ -28,7 +28,6 @@ import {
   is3dAtom,
   pieceSetAtom,
   primaryColorAtom,
-  referenceDbAtom,
   spellCheckAtom,
   storedDatabasesDirAtom,
   storedDocumentDirAtom,
@@ -61,6 +60,8 @@ const colorSchemeManager = localStorageColorSchemeManager({
 import { ask } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
+import { registerSourceCommands } from "@/chessin/sources/commands";
+import { defaultSourceAtom } from "@/chessin/sources/sources";
 import ErrorComponent from "@/components/ErrorComponent";
 import { getDatabasesDir, getDocumentDir, getEnginesDir, getPuzzlesDir } from "@/utils/directories";
 import { initUserAgent } from "@/utils/http";
@@ -134,12 +135,13 @@ const checkForUpdates = async () => {
   }
 };
 
+// Chessin: only a local default source has something to warm up.
 const preloadReferenceDb = async (store: ReturnType<typeof getDefaultStore>) => {
-  const referenceDb = store.get(referenceDbAtom);
-  if (referenceDb) {
-    info(`Preloading reference database: ${referenceDb}`);
-    commands.preloadReferenceDb(referenceDb).catch((e: unknown) => {
-      info(`Failed to preload reference database: ${e}`);
+  const source = store.get(defaultSourceAtom);
+  if (source.kind === "local") {
+    info(`Preloading default source database: ${source.path}`);
+    commands.preloadReferenceDb(source.path).catch((e: unknown) => {
+      info(`Failed to preload default source database: ${e}`);
     });
   }
 };
@@ -165,6 +167,7 @@ function useAppStartup() {
       checkForUpdates();
 
       const store = getDefaultStore();
+      registerSourceCommands();
 
       const unlistenFile = await listen<string>("open-cli-file", ({ payload }) => {
         void openCommandLineFile(payload, setTabs, setActiveTab, navigateToBoard);

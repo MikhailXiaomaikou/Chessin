@@ -1,5 +1,5 @@
 import {
-  Alert,
+  Anchor,
   Box,
   Button,
   Divider,
@@ -22,12 +22,14 @@ import {
   IconInfoCircle,
   IconPlayerPlay,
 } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import { tabLocalPathAtomFamily } from "@/chessin/sources/sources";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
-import { coverageMinGamesAtom, currentTabAtom, referenceDbAtom } from "@/state/atoms";
+import { coverageMinGamesAtom, currentTabAtom } from "@/state/atoms";
 import { searchPosition } from "@/utils/db";
 import { roundKeepSum } from "@/utils/format";
 import { isPrefix } from "@/utils/misc";
@@ -59,8 +61,10 @@ function RepertoireInfo() {
   const makeMoves = useStore(store, (s) => s.makeMoves);
   const setStart = useStore(store, (s) => s.setStart);
 
-  const referenceDb = useAtomValue(referenceDbAtom);
   const currentTab = useAtomValue(currentTabAtom);
+  // Chessin: coverage comes from the tab's local source (else the default when
+  // local). Without one the pane stays usable and shows a hint instead.
+  const referenceDb = useAtomValue(tabLocalPathAtomFamily(currentTab?.value ?? ""));
   const minGames = useAtomValue(coverageMinGamesAtom);
 
   const orientation = headers.orientation || "white";
@@ -230,17 +234,22 @@ function RepertoireInfo() {
 
   if (!currentTab) return null;
 
-  if (!referenceDb) {
-    return (
-      <Stack p="sm">
-        <TreeStatsBar stats={stats} t={t} />
-        <Alert icon={<IconInfoCircle />}>{t("Board.Practice.Build.NoRefDb")}</Alert>
-      </Stack>
-    );
-  }
-
   return (
     <Stack h="100%" p="sm" gap={0} style={{ overflow: "hidden" }}>
+      {!referenceDb && (
+        <Paper p="sm" my="sm" withBorder>
+          <Group gap="xs" wrap="nowrap" align="flex-start">
+            <IconInfoCircle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+            <Text fz="xs" c="dimmed">
+              {t("Sources.NoLocalHint")}{" "}
+              <Anchor component={Link} to="/databases" fz="xs">
+                {t("Sources.ManageCollections")}
+              </Anchor>
+            </Text>
+          </Group>
+        </Paper>
+      )}
+
       {isBeforeStart && (
         <Paper p="sm" my="sm" withBorder>
           <Stack gap="xs">
@@ -341,6 +350,7 @@ function RepertoireInfo() {
           positionMoves={positionMoves}
           coverageMap={coverageMap}
           coverageLoading={coverageLoading}
+          coverageAvailable={referenceDb !== null}
           root={root}
           nextGap={nextGap}
           biggestGap={biggestGap}
@@ -385,6 +395,7 @@ function MovesView({
   positionMoves,
   coverageMap,
   coverageLoading,
+  coverageAvailable,
   root,
   nextGap,
   biggestGap,
@@ -399,6 +410,8 @@ function MovesView({
   positionMoves: PositionMove[];
   coverageMap: Map<string, number>;
   coverageLoading: boolean;
+  /** False when no local source backs the coverage numbers (gap hints are hidden). */
+  coverageAvailable: boolean;
   root: TreeNode;
   nextGap: number[] | null;
   biggestGap: number[] | null;
@@ -654,21 +667,24 @@ function MovesView({
               </>
             )}
 
-            {!nextGap && !biggestGap && (isUserTurn ? hasResponses : positionMoves.length > 0) && (
-              <>
-                <Divider />
-                <Paper p="sm" withBorder>
-                  <Group gap="xs" justify="center">
-                    <ThemeIcon size="sm" color="green" variant="light" radius="xl">
-                      <IconCheck size={14} />
-                    </ThemeIcon>
-                    <Text fz="sm" c="green" fw={500}>
-                      {t("Board.Practice.Build.NoGapsFound")}
-                    </Text>
-                  </Group>
-                </Paper>
-              </>
-            )}
+            {coverageAvailable &&
+              !nextGap &&
+              !biggestGap &&
+              (isUserTurn ? hasResponses : positionMoves.length > 0) && (
+                <>
+                  <Divider />
+                  <Paper p="sm" withBorder>
+                    <Group gap="xs" justify="center">
+                      <ThemeIcon size="sm" color="green" variant="light" radius="xl">
+                        <IconCheck size={14} />
+                      </ThemeIcon>
+                      <Text fz="sm" c="green" fw={500}>
+                        {t("Board.Practice.Build.NoGapsFound")}
+                      </Text>
+                    </Group>
+                  </Paper>
+                </>
+              )}
           </>
         )}
       </Stack>

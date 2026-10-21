@@ -5,7 +5,13 @@ import { INITIAL_FEN, makeFen, parseFen } from "chessops/fen";
 import { isPawns, parseComment } from "chessops/pgn";
 import { makeSan, parseSan } from "chessops/san";
 import { commands, type Outcome, type Score, type Token } from "@/bindings";
-import { ANNOTATION_INFO, isBasicAnnotation, NAG_INFO } from "./annotation";
+import {
+    type Annotation,
+    annotationToNag,
+    compareAnnotations,
+    isBasicAnnotation,
+    nagToAnnotation,
+} from "./annotation";
 import { parseSanOrUci, positionFromFen } from "./chessops";
 import { harmonicMean, isPrefix, mean } from "./misc";
 import { formatScore, getAccuracy, getCPLoss, INITIAL_SCORE } from "./score";
@@ -45,6 +51,134 @@ export const makeClk = (seconds: number): string => {
     })}`;
 };
 
+/**
+ * Separates a comment written *before* a move (`( {Alt} 1. d4 )`) from the
+ * node's own comment inside `TreeNode.comment`, since the node model has no
+ * dedicated slot for it. The stored form is `${pre}${SEPARATOR}${own}`; the
+ * separator (U+2063 INVISIBLE SEPARATOR) renders as nothing in the editor and
+ * is split again on export so the comment goes back in front of the move.
+ */
+export const PRE_MOVE_COMMENT_SEPARATOR = "\u2063";
+
+export function splitPreMoveComment(comment: string): { pre: string; text: string } {
+    const index = comment.indexOf(PRE_MOVE_COMMENT_SEPARATOR);
+    if (index === -1) {
+        return { pre: "", text: comment };
+    }
+    return {
+        pre: comment.slice(0, index),
+        text: comment.slice(index + PRE_MOVE_COMMENT_SEPARATOR.length),
+    };
+}
+
+/**
+ * Makes free text safe inside a PGN brace comment. A `}` would terminate the
+ * comment, so it is replaced with the fullwidth `｝` (U+FF5D): unlike `]`
+ * it keeps the meaning of the text, and it is not mapped back on import since
+ * Chinese text legitimately contains fullwidth brackets. `{` is allowed inside
+ * a comment by the PGN standard and is kept. Newlines are kept as well (every
+ * parser treats a comment as running until the next `}`), only `\r\n` is
+ * normalised to `\n`.
+ */
+export function escapePgnComment(text: string): string {
+    return text.replace(/\r\n?/g, "\n").replace(/\}/g, "｝");
+}
+
+const SHAPE_COLOR_LETTERS: Record<string, string> = {
+    green: "G",
+    red: "R",
+    yellow: "Y",
+    blue: "B",
+};
+
+function shapeColorLetter(brush: string | undefined): string | null {
+    if (!brush) return "G";
+    const normalized = brush.replace(/^pale/, "").toLowerCase();
+    return SHAPE_COLOR_LETTERS[normalized] ?? null;
+}
+
+function makeEvalTag(tree: TreeNode): string | null {
+    if (tree.score === null) return null;
+    const { value } = tree.score;
+    let text: string;
+    if (value.type === "cp") {
+        text = formatScore(value);
+    } else if (value.type === "mate") {
+        text = `#${value.value}`;
+    } else {
+        return null;
+    }
+    if (tree.depth !== null && tree.depth !== undefined) {
+        text += `,${tree.depth}`;
+    }
+    return `[%eval ${text}]`;
+}
+
+/**
+ * Annotations as they appear after the SAN: at most one basic glyph (`!`, `?`,
+ * …) is written as a suffix, everything else as numeric `$n` NAGs in
+ * ascending order, so `["?", "??"]` becomes `e4? $4`.
+ */
+function makeAnnotationText(annotations: Annotation[]): string {
+    const sorted = annotations.filter((annotation) => annotation !== "").sort(compareAnnotations);
+    let suffix = "";
+    const nags: string[] = [];
+    for (const annotation of sorted) {
+        if (suffix === "" && isBasicAnnotation(annotation)) {
+            suffix = annotation;
+        } else {
+            nags.push(`$${annotationToNag(annotation)}`);
+        }
+    }
+    return nags.length > 0 ? `${suffix} ${nags.join(" ")}` : suffix;
+}
+
+function makeCommentBlock(
+    tree: TreeNode,
+    text: string,
+    opt: { comments: boolean; extraMarkups: boolean },
+): string | null {
+    const parts: string[] = [];
+
+    if (opt.extraMarkups) {
+        const evalTag = makeEvalTag(tree);
+        if (evalTag) {
+            parts.push(evalTag);
+        }
+        if (tree.clock !== undefined) {
+            parts.push(`[%clk ${makeClk(tree.clock)}]`);
+        }
+        const squares: string[] = [];
+        const arrows: string[] = [];
+        for (const shape of tree.shapes) {
+            const color = shapeColorLetter(shape.brush);
+            if (!color) continue;
+            if (shape.dest === undefined || shape.dest === shape.orig) {
+                squares.push(color + shape.orig);
+            } else {
+                arrows.push(color + shape.orig + shape.dest);
+            }
+        }
+        if (squares.length > 0) {
+            parts.push(`[%csl ${squares.join(",")}]`);
+        }
+        if (arrows.length > 0) {
+            parts.push(`[%cal ${arrows.join(",")}]`);
+        }
+    }
+
+    if (opt.comments && text !== "") {
+        parts.push(escapePgnComment(text));
+    }
+
+    return parts.length > 0 ? `{${parts.join(" ")}}` : null;
+}
+
+/**
+ * Serialises one node: optional pre-move comment, move number, SAN,
+ * annotations and the comment block. Parts are joined by single spaces and the
+ * result carries no trailing whitespace.
+ */
 export function getMoveText(
     tree: TreeNode,
     opt: {
@@ -54,13 +188,19 @@ export function getMoveText(
         isFirst?: boolean;
     },
 ): string {
-    const isBlack = tree.halfMoves % 2 === 0;
-    const moveNumber = Math.ceil(tree.halfMoves / 2);
-    let moveText = "";
+    const parts: string[] = [];
+    const { pre, text } = splitPreMoveComment(tree.comment);
+
+    if (opt.comments && pre !== "") {
+        parts.push(`{${escapePgnComment(pre)}}`);
+    }
 
     if (tree.san) {
+        const isBlack = tree.halfMoves % 2 === 0;
+        const moveNumber = Math.ceil(tree.halfMoves / 2);
+        let moveText = "";
         if (isBlack) {
-            if (opt.isFirst) {
+            if (opt.isFirst || (opt.comments && pre !== "")) {
                 moveText += `${moveNumber}... `;
             }
         } else {
@@ -68,62 +208,18 @@ export function getMoveText(
         }
         moveText += tree.san;
         if (opt.glyphs) {
-            for (const annotation of tree.annotations) {
-                if (annotation === "") continue;
-                moveText += isBasicAnnotation(annotation)
-                    ? tree.annotations
-                    : ` $${ANNOTATION_INFO[annotation].nag}`;
-            }
+            moveText += makeAnnotationText(tree.annotations);
         }
-        moveText += " ";
+        parts.push(moveText);
     }
 
     if (opt.comments || opt.extraMarkups) {
-        let content = "{";
-
-        if (opt.extraMarkups) {
-            if (tree.score !== null) {
-                if (tree.score.value.type === "cp") {
-                    content += `[%eval ${formatScore(tree.score.value)}] `;
-                } else {
-                    content += `[%eval #${tree.score.value.value}] `;
-                }
-            }
-            if (tree.clock !== undefined) {
-                content += `[%clk ${makeClk(tree.clock)}] `;
-            }
-        }
-
-        if (opt.extraMarkups && tree.shapes.length > 0) {
-            const squares = tree.shapes.filter((shape) => shape.dest === undefined);
-            const arrows = tree.shapes.filter((shape) => shape.dest !== undefined);
-
-            if (squares.length > 0) {
-                content += `[%csl ${squares
-                    .map((shape) => {
-                        return shape.brush![0].toUpperCase() + shape.orig;
-                    })
-                    .join(",")}]`;
-            }
-            if (arrows.length > 0) {
-                content += `[%cal ${arrows
-                    .map((shape) => {
-                        return shape.brush![0].toUpperCase() + shape.orig + shape.dest;
-                    })
-                    .join(",")}]`;
-            }
-        }
-
-        if (opt.comments && tree.comment !== "") {
-            content += tree.comment;
-        }
-        content += "} ";
-
-        if (content !== "{} ") {
-            moveText += content;
+        const block = makeCommentBlock(tree, tree.san ? text : `${pre} ${text}`.trim(), opt);
+        if (block) {
+            parts.push(block);
         }
     }
-    return moveText;
+    return parts.join(" ");
 }
 
 export function getLastMainlinePosition(root: TreeNode): number[] {
@@ -169,53 +265,116 @@ export function getVariationLine(
     return moves;
 }
 
+/** PGN tag values escape `"` and `\` with a backslash. */
+function encodePgnHeaderValue(value: string | number): string {
+    return String(value).replace(/[\\"]/g, "\\$&");
+}
+
+function decodePgnHeaderValue(value: string): string {
+    return value.replace(/\\(["\\])/g, "$1");
+}
+
+function pgnTag(name: string, value: string | number): string {
+    return `[${name} "${encodePgnHeaderValue(value)}"]\n`;
+}
+
 export function headersToPGN(game: GameHeaders): string {
-    let headers = `[Event "${game.event || "?"}"]
-[Site "${game.site || "?"}"]
-[Date "${game.date || "????.??.??"}"]
-[Round "${game.round || "?"}"]
-[White "${game.white || "?"}"]
-[Black "${game.black || "?"}"]
-[Result "${game.result}"]
-`;
+    let headers = pgnTag("Event", game.event || "?");
+    headers += pgnTag("Site", game.site || "?");
+    headers += pgnTag("Date", game.date || "????.??.??");
+    headers += pgnTag("Round", game.round || "?");
+    headers += pgnTag("White", game.white || "?");
+    headers += pgnTag("Black", game.black || "?");
+    headers += pgnTag("Result", game.result);
     if (game.time) {
-        headers += `[UTCTime "${game.time}"]\n`;
+        headers += pgnTag("UTCTime", game.time);
     }
     if (game.white_elo !== undefined && game.white_elo !== null) {
-        headers += `[WhiteElo "${game.white_elo === 0 ? "-" : game.white_elo}"]\n`;
+        headers += pgnTag("WhiteElo", game.white_elo === 0 ? "-" : game.white_elo);
     }
     if (game.black_elo !== undefined && game.black_elo !== null) {
-        headers += `[BlackElo "${game.black_elo === 0 ? "-" : game.black_elo}"]\n`;
+        headers += pgnTag("BlackElo", game.black_elo === 0 ? "-" : game.black_elo);
     }
     if (game.start && game.start.length > 0) {
-        headers += `[Start "${JSON.stringify(game.start)}"]\n`;
+        headers += pgnTag("Start", JSON.stringify(game.start));
     }
     if (game.orientation) {
-        headers += `[Orientation "${game.orientation}"]\n`;
+        headers += pgnTag("Orientation", game.orientation);
     }
     if (game.time_control) {
-        headers += `[TimeControl "${game.time_control}"]\n`;
+        headers += pgnTag("TimeControl", game.time_control);
     }
     if (game.white_time_control) {
-        headers += `[WhiteTimeControl "${game.white_time_control}"]\n`;
+        headers += pgnTag("WhiteTimeControl", game.white_time_control);
     }
     if (game.black_time_control) {
-        headers += `[BlackTimeControl "${game.black_time_control}"]\n`;
+        headers += pgnTag("BlackTimeControl", game.black_time_control);
     }
     if (game.eco) {
-        headers += `[ECO "${game.eco}"]\n`;
+        headers += pgnTag("ECO", game.eco);
     }
     if (game.variant) {
-        headers += `[Variant "${game.variant}"]\n`;
+        headers += pgnTag("Variant", game.variant);
     }
     for (const [key, value] of Object.entries(game.other ?? {})) {
-        headers += `[${key} "${value}"]\n`;
+        headers += pgnTag(key, value);
     }
     return headers;
 }
 
 export function defaultPGN() {
     return `[Event "?"]\n[Site "?"]\n[Date "????.??.??"]\n[Round "?"]\n[White "?"]\n[Black "?"]\n[Result "*"]\n\n*`;
+}
+
+type MovetextOptions = {
+    glyphs: boolean;
+    comments: boolean;
+    variations: boolean;
+    extraMarkups: boolean;
+};
+
+/**
+ * Movetext of the line starting below `node` (the node itself is not
+ * written). With `path` only that line is followed and variations are
+ * omitted; otherwise the first child is the main line and the other children
+ * are written as `(…)` variations right after it. A black move gets its move
+ * number when it opens a line or follows a comment or variation.
+ */
+function getMovetextParts(
+    node: TreeNode,
+    opt: MovetextOptions,
+    isFirst: boolean,
+    path: number[] | null,
+): string[] {
+    const parts: string[] = [];
+    let current = node;
+    let needsNumber = isFirst;
+    let remaining = path;
+    while (current.children.length > 0) {
+        const index = remaining ? remaining[0] : 0;
+        const child = current.children[index];
+        if (!child || (remaining && remaining.length === 0)) {
+            break;
+        }
+        const moveText = getMoveText(child, { ...opt, isFirst: needsNumber });
+        parts.push(moveText);
+        needsNumber = moveText.endsWith("}");
+
+        if (!remaining && opt.variations) {
+            for (const variation of current.children.slice(1)) {
+                const inner = [
+                    getMoveText(variation, { ...opt, isFirst: true }),
+                    ...getMovetextParts(variation, opt, false, null),
+                ];
+                parts.push(`(${inner.join(" ")})`);
+                needsNumber = true;
+            }
+        }
+
+        current = child;
+        remaining = remaining ? remaining.slice(1) : null;
+    }
+    return parts;
 }
 
 export function getPGN(
@@ -246,66 +405,24 @@ export function getPGN(
         pgn += headersToPGN(headers);
     }
     if (root && tree.fen !== INITIAL_FEN) {
-        pgn += '[SetUp "1"]\n';
-        pgn += `[FEN "${tree.fen}"]\n`;
+        pgn += pgnTag("SetUp", "1");
+        pgn += pgnTag("FEN", tree.fen);
     }
     pgn += "\n";
-    if (root && tree.comment !== null) {
-        pgn += `${getMoveText(tree, {
-            glyphs,
-            comments,
-            extraMarkups,
-        })}`;
-    }
-    const variationsPGN = variations
-        ? tree.children.slice(1).map(
-              (variation) =>
-                  `${getMoveText(variation, {
-                      glyphs,
-                      comments,
-                      extraMarkups,
-                      isFirst: true,
-                  })} ${getPGN(variation, {
-                      headers: null,
-                      glyphs,
-                      comments,
-                      variations,
-                      extraMarkups,
-                      root: false,
-                      path: null,
-                  })}`,
-          )
-        : [];
-    if (tree.children.length > 0) {
-        const child = tree.children[path ? path[0] : 0];
-        pgn += getMoveText(child, {
-            glyphs: glyphs,
-            comments,
-            extraMarkups,
-            isFirst: root,
-        });
-    }
-    if (!path) {
-        for (const variation of variationsPGN) {
-            pgn += ` (${variation}) `;
+
+    const opt = { glyphs, comments, variations, extraMarkups };
+    const parts: string[] = [];
+    if (root) {
+        const rootText = getMoveText(tree, opt);
+        if (rootText !== "") {
+            parts.push(rootText);
         }
     }
-
-    if (tree.children.length > 0) {
-        pgn += getPGN(tree.children[path ? path[0] : 0], {
-            headers: null,
-            glyphs,
-            comments,
-            variations,
-            extraMarkups,
-            root: false,
-            path: path ? path.slice(1) : null,
-        });
-    }
+    parts.push(...getMovetextParts(tree, opt, root, path));
     if (root && headers) {
-        pgn += ` ${headers.result}`;
+        parts.push(headers.result);
     }
-    return pgn.trim();
+    return (pgn + parts.join(" ")).trim();
 }
 
 export function parseKeyboardMove(san: string, fen: string) {
@@ -353,6 +470,62 @@ export async function getOpening(root: TreeNode, position: number[]): Promise<st
     return "";
 }
 
+function appendComment(node: TreeNode, text: string) {
+    if (text === "") return;
+    node.comment = node.comment === "" ? text : `${node.comment} ${text}`;
+}
+
+function addShapes(node: TreeNode, shapes: DrawShape[]) {
+    for (const shape of shapes) {
+        const exists = node.shapes.some(
+            (s) => s.orig === shape.orig && s.dest === shape.dest && s.brush === shape.brush,
+        );
+        if (!exists) {
+            node.shapes.push(shape);
+        }
+    }
+}
+
+/** Applies a `{…}` comment token (text and `[%…]` markups) to `node`. */
+function applyComment(node: TreeNode, raw: string) {
+    const comment = parseComment(raw);
+
+    if (comment.evaluation) {
+        const { evaluation } = comment;
+        node.score = {
+            value: isPawns(evaluation)
+                ? { type: "cp", value: Math.round(evaluation.pawns * 100) }
+                : { type: "mate", value: evaluation.mate },
+            wdl: null,
+        };
+        node.depth = evaluation.depth ?? null;
+    }
+
+    if (comment.shapes.length > 0) {
+        addShapes(
+            node,
+            comment.shapes.map((shape) => ({
+                orig: makeSquare(shape.from),
+                dest: shape.to === shape.from ? undefined : makeSquare(shape.to),
+                brush: shape.color,
+            })),
+        );
+    }
+
+    if (comment.clock !== undefined) {
+        node.clock = comment.clock;
+    }
+
+    // Strip [%timestamp N] annotations (chess.com export format) from comment text
+    let text = comment.text.replace(/\s?\[%timestamp\s+\d+\]\s?/g, " ").trim();
+    // The node model has no slot for elapsed move time, so `[%emt]` is kept in
+    // the comment text (canonical form, in front) and written back verbatim.
+    if (comment.emt !== undefined) {
+        text = `[%emt ${makeClk(comment.emt)}]${text === "" ? "" : ` ${text}`}`;
+    }
+    appendComment(node, text);
+}
+
 function innerParsePGN(tokens: Token[], fen: string = INITIAL_FEN, halfMoves = 0): TreeState {
     const tree = defaultTree(fen);
     let root = tree.root;
@@ -368,43 +541,7 @@ function innerParsePGN(tokens: Token[], fen: string = INITIAL_FEN, halfMoves = 0
         const token = tokens[i];
 
         if (token.type === "Comment") {
-            const comment = parseComment(token.value);
-
-            if (comment.evaluation) {
-                if (isPawns(comment.evaluation)) {
-                    root.score = {
-                        value: {
-                            type: "cp",
-                            value: comment.evaluation.pawns * 100,
-                        },
-                        wdl: null,
-                    };
-                } else {
-                    root.score = {
-                        value: {
-                            type: "mate",
-                            value: comment.evaluation.mate,
-                        },
-                        wdl: null,
-                    };
-                }
-            }
-
-            if (comment.shapes.length > 0) {
-                const shapes: DrawShape[] = comment.shapes.map((shape) => ({
-                    orig: makeSquare(shape.from),
-                    dest: makeSquare(shape.to),
-                    brush: shape.color,
-                }));
-                root.shapes.push(...shapes);
-            }
-
-            if (comment.clock) {
-                root.clock = comment.clock;
-            }
-
-            // Strip [%timestamp N] annotations (chess.com export format) from comment text
-            root.comment = comment.text.replace(/\s?\[%timestamp\s+\d+\]\s?/g, " ").trim();
+            applyComment(root, token.value);
         } else if (token.type === "ParenOpen") {
             const variation = [];
             let subvariations = 0;
@@ -419,15 +556,35 @@ function innerParsePGN(tokens: Token[], fen: string = INITIAL_FEN, halfMoves = 0
                 i++;
             }
             const newTree = innerParsePGN(variation, prevNode.fen, root.halfMoves - 1);
-            if (newTree.root.children.length > 0) {
-                prevNode.children.push(newTree.root.children[0]);
+            const variationRoot = newTree.root;
+            const first = variationRoot.children[0];
+            if (first) {
+                prevNode.children.push(first);
+                // A comment before the variation's first move belongs to that
+                // move; the node model has no field for it, so it is stored in
+                // front of the node's own comment behind a separator.
+                if (variationRoot.comment !== "") {
+                    first.comment = `${variationRoot.comment}${PRE_MOVE_COMMENT_SEPARATOR}${first.comment}`;
+                }
+            } else {
+                appendComment(prevNode, variationRoot.comment);
+            }
+            // Markups before the first move describe the parent position.
+            addShapes(prevNode, variationRoot.shapes);
+            if (prevNode.score === null && variationRoot.score !== null) {
+                prevNode.score = variationRoot.score;
+                prevNode.depth = variationRoot.depth;
+            }
+            if (prevNode.clock === undefined && variationRoot.clock !== undefined) {
+                prevNode.clock = variationRoot.clock;
             }
         } else if (token.type === "ParenClose") {
         } else if (token.type === "Nag") {
-            root.annotations.push(NAG_INFO.get(token.value) || "");
-            root.annotations.sort((a, b) => {
-                return ANNOTATION_INFO[a].nag - ANNOTATION_INFO[b].nag;
-            });
+            const annotation = nagToAnnotation(token.value);
+            if (annotation !== "" && !root.annotations.includes(annotation)) {
+                root.annotations.push(annotation);
+                root.annotations.sort(compareAnnotations);
+            }
         } else if (token.type === "San") {
             const [pos, error] = positionFromFen(root.fen);
             if (error) {
@@ -460,22 +617,22 @@ function innerParsePGN(tokens: Token[], fen: string = INITIAL_FEN, halfMoves = 0
     return tree;
 }
 
-export async function parsePGN(pgn: string, initialFen?: string): Promise<TreeState> {
-    const tokens = unwrap(await commands.lexPgn(pgn));
-
+/** Builds the game tree from the token stream of the `lex_pgn` command. */
+export function parsePgnTokens(tokens: Token[], initialFen?: string): TreeState {
     const headers = getPgnHeaders(tokens);
     const fen = initialFen?.trim() || headers.fen.trim();
 
     const [pos] = positionFromFen(fen);
 
-    const tree = innerParsePGN(
-        tokens,
-        initialFen?.trim() || headers.fen.trim(),
-        pos?.turn === "black" ? 1 : 0,
-    );
+    const tree = innerParsePGN(tokens, fen, pos?.turn === "black" ? 1 : 0);
     tree.headers = headers;
     tree.position = headers.start ?? [];
     return tree;
+}
+
+export async function parsePGN(pgn: string, initialFen?: string): Promise<TreeState> {
+    const tokens = unwrap(await commands.lexPgn(pgn));
+    return parsePgnTokens(tokens, initialFen);
 }
 
 function getPgnHeaders(tokens: Token[]): GameHeaders {
@@ -484,7 +641,7 @@ function getPgnHeaders(tokens: Token[]): GameHeaders {
     for (const token of tokens) {
         if (token.type === "Header") {
             const { tag, value } = token.value;
-            headersN.set(tag, value);
+            headersN.set(tag, decodePgnHeaderValue(value));
         } else if (token.type === "Outcome") {
             headersN.set("Result", token.value);
         }

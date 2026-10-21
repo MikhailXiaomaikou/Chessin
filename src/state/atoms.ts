@@ -15,6 +15,12 @@ import type {
 import type { ReviewLog } from "ts-fsrs";
 import { z } from "zod";
 import type { BestMoves, GoMode } from "@/bindings";
+import {
+    DEFAULT_SOURCE,
+    defaultSourceAtom,
+    localPathOf,
+    localSource,
+} from "@/chessin/sources/sources";
 import { DEFAULT_TIME_CONTROL, type OpponentSettings } from "@/components/boards/OpponentForm";
 import { type Position, positionSchema } from "@/components/files/opening";
 import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
@@ -281,7 +287,16 @@ export const addRecentFileAtom = atom(null, (get, set, file: Omit<RecentFile, "l
 
 // Database
 
-export const referenceDbAtom = atomWithStorage<string | null>("reference-database", null);
+// Chessin (IA-3 v0): the hidden "reference database" became the visible default
+// source (src/chessin/sources). Kept as a derived view over `defaultSourceAtom` so
+// callers that only care about a local database path keep compiling: it reads the
+// default source's path when that source is local (else null), and writing a path
+// sets a local default (null restores the built-in default, Lichess Masters).
+export const referenceDbAtom = atom(
+    (get) => localPathOf(get(defaultSourceAtom)),
+    (_get, set, value: string | null) =>
+        set(defaultSourceAtom, value ? localSource(value) : DEFAULT_SOURCE),
+);
 
 export const selectedPuzzleDbAtom = atomWithStorage<string | null>("puzzle-db", null);
 
@@ -453,11 +468,6 @@ export const masterOptionsAtom = atomWithStorage<MasterGamesOptions>(
         getOnInit: true,
     },
 );
-
-const dbTypeFamily = atomFamily((_tab: string) =>
-    atom<"local" | "lch_all" | "lch_master">("local"),
-);
-export const currentDbTypeAtom = tabValue(dbTypeFamily);
 
 const dbTabFamily = atomFamily((_tab: string) => atom("stats"));
 export const currentDbTabAtom = tabValue(dbTabFamily);

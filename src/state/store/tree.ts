@@ -1,8 +1,19 @@
 import type { DrawShape } from "@lichess-org/chessground/draw";
+import { Button, type ButtonProps, Group, Text, type TextProps } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { isNormal, type Move, parseUci } from "chessops";
 import { INITIAL_FEN, makeFen } from "chessops/fen";
 import { makeSan, parseSan } from "chessops/san";
-import { type Draft, produce } from "immer";
+import i18n from "i18next";
+import {
+    applyPatches,
+    type Draft,
+    enablePatches,
+    type Patch,
+    produce,
+    produceWithPatches,
+} from "immer";
+import { createElement, type FunctionComponent, type ReactNode } from "react";
 import { createStore, type StateCreator } from "zustand";
 import { persist } from "zustand/middleware";
 import type { BestMoves, Outcome, Score } from "@/bindings";
@@ -16,12 +27,39 @@ import { playSound } from "@/utils/sound";
 import {
     createNode,
     defaultTree,
+    ensureNodeIds,
     type GameHeaders,
     getNodeAtPath,
     type TreeNode,
     type TreeState,
     treeIteratorMainLine,
 } from "@/utils/treeReducer";
+
+enablePatches();
+
+/** Maximum number of undoable entries kept per store (= per tab). */
+export const TREE_HISTORY_CAP = 200;
+
+export type SetScoreOptions = {
+    /** Update the score without marking the tree dirty and without recording history. */
+    transient?: boolean;
+};
+
+type HistoryEntry = { patches: Patch[]; inversePatches: Patch[] };
+
+/**
+ * Top-level keys whose changes alone never create a history entry: pure
+ * navigation (`position`) and bookkeeping flags. A recorded action must touch
+ * something else (root, headers, ...).
+ */
+const EPHEMERAL_KEYS = new Set<string | number>([
+    "position",
+    "dirty",
+    "canUndo",
+    "canRedo",
+    "report",
+    "practicePath",
+]);
 
 export interface TreeStoreState extends TreeState {
     currentNode: () => TreeNode;
@@ -65,9 +103,21 @@ export interface TreeStoreState extends TreeState {
     setHeaders: (payload: GameHeaders) => void;
     setResult: (payload: Outcome) => void;
     setShapes: (shapes: DrawShape[]) => void;
-    setScore: (score: Score) => void;
+    setScore: {
+        /** Sets the score of the node at `path`. `transient: true` skips dirty + history. */
+        (path: number[], score: Score, opts?: SetScoreOptions): void;
+        /** @deprecated Sets the score of the current node (always dirty, always recorded). */
+        (score: Score): void;
+    };
 
     clearShapes: () => void;
+
+    /** Reverts the last recorded editing action (navigation is never recorded). */
+    undo: () => void;
+    /** Re-applies the last undone action. */
+    redo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
 
     setFen: (fen: string) => void;
 
@@ -92,100 +142,164 @@ export interface TreeStoreState extends TreeState {
 
 export type TreeStore = ReturnType<typeof createTreeStore>;
 
+type PersistedTreeState = Omit<TreeStoreState, "canUndo" | "canRedo">;
+
 export const createTreeStore = (id?: string, initialTree?: TreeState) => {
-    const stateCreator: StateCreator<TreeStoreState> = (set, get) => ({
-        ...(initialTree ?? defaultTree()),
+    const undoStack: HistoryEntry[] = [];
+    const redoStack: HistoryEntry[] = [];
 
-        currentNode: () => getNodeAtPath(get().root, get().position),
-        getNode: (path: number[]) => getNodeAtPath(get().root, path),
+    const stateCreator: StateCreator<TreeStoreState> = (set, get) => {
+        const clearHistory = () => {
+            undoStack.length = 0;
+            redoStack.length = 0;
+        };
 
-        practicePath: null,
-        setPracticePath: (path) => set({ practicePath: path }),
+        /**
+         * Applies `recipe` to the state. If it changed anything beyond
+         * navigation/bookkeeping, the change is recorded so it can be undone.
+         */
+        const commit = (recipe: (state: Draft<TreeStoreState>) => void) => {
+            const [next, patches, inversePatches] = produceWithPatches(get(), recipe);
+            if (patches.length === 0) return;
+            if (!patches.some((p) => !EPHEMERAL_KEYS.has(p.path[0]))) {
+                set(next);
+                return;
+            }
+            undoStack.push({ patches, inversePatches });
+            if (undoStack.length > TREE_HISTORY_CAP) {
+                undoStack.splice(0, undoStack.length - TREE_HISTORY_CAP);
+            }
+            redoStack.length = 0;
+            set({ ...next, canUndo: true, canRedo: false });
+        };
 
-        setState: (state) => {
-            set(() => state);
-        },
+        const travel = (from: HistoryEntry[], to: HistoryEntry[], inverse: boolean) => {
+            const entry = from.pop();
+            if (!entry) return;
+            let next: TreeStoreState;
+            try {
+                next = applyPatches(get(), inverse ? entry.inversePatches : entry.patches);
+            } catch (e) {
+                // The tree diverged from what history expects (e.g. a raw setState);
+                // drop the history rather than leave the tree in a broken state.
+                console.error("Tree history out of sync, clearing it", e);
+                clearHistory();
+                set({ canUndo: false, canRedo: false });
+                return;
+            }
+            to.push(entry);
+            set({
+                ...next,
+                dirty: true,
+                canUndo: undoStack.length > 0,
+                canRedo: redoStack.length > 0,
+            });
+        };
 
-        reset: () =>
-            set(() => {
-                return defaultTree();
-            }),
+        const initial = initialTree ?? defaultTree();
 
-        save: () => {
-            set((state) => ({
-                ...state,
-                dirty: false,
-            }));
-        },
+        return {
+            ...initial,
+            root: ensureNodeIds(initial.root),
+            canUndo: false,
+            canRedo: false,
 
-        setFen: (fen) =>
-            set(
-                produce((state) => {
+            currentNode: () => getNodeAtPath(get().root, get().position),
+            getNode: (path: number[]) => getNodeAtPath(get().root, path),
+
+            practicePath: null,
+            setPracticePath: (path) => set({ practicePath: path }),
+
+            undo: () => travel(undoStack, redoStack, true),
+            redo: () => travel(redoStack, undoStack, false),
+
+            setState: (state) => {
+                clearHistory();
+                set(() => ({
+                    ...state,
+                    root: ensureNodeIds(state.root),
+                    canUndo: false,
+                    canRedo: false,
+                }));
+            },
+
+            reset: () => {
+                clearHistory();
+                set(() => ({ ...defaultTree(), canUndo: false, canRedo: false }));
+            },
+
+            save: () => {
+                set((state) => ({
+                    ...state,
+                    dirty: false,
+                }));
+            },
+
+            setFen: (fen) =>
+                commit((state) => {
                     state.dirty = true;
                     state.root = defaultTree(fen).root;
                     state.position = [];
                 }),
-            ),
 
-        goToNext: () =>
-            set((state) => {
-                const { practicePath } = state;
+            goToNext: () =>
+                set((state) => {
+                    const { practicePath } = state;
 
-                // In practice mode, block navigation past the drill position
-                if (practicePath && state.position.length >= practicePath.length) {
-                    return state;
-                }
-
-                // In practice mode, follow the drill path; otherwise take first child
-                const childIndex = practicePath ? practicePath[state.position.length] : 0;
-
-                const node = getNodeAtPath(state.root, state.position);
-                if (!node || !node.children[childIndex]?.move) return state;
-                const san = node.children[childIndex].san;
-                if (!san) return state;
-                playSound(san.includes("x"), san.includes("+"));
-                return {
-                    ...state,
-                    position: [...state.position, childIndex],
-                };
-            }),
-        goToPrevious: () =>
-            set((state) => ({
-                ...state,
-                position: state.position.slice(0, -1),
-            })),
-
-        goToAnnotation: (annotation, color) =>
-            set(
-                produce((state) => {
-                    const colorN = color === "white" ? 1 : 0;
-
-                    let p: number[] = state.position;
-                    let node = getNodeAtPath(state.root, p);
-                    while (true) {
-                        if (node.children.length === 0) {
-                            p = [];
-                        } else {
-                            p.push(0);
-                        }
-
-                        node = getNodeAtPath(state.root, p);
-
-                        if (
-                            node.annotations.includes(annotation) &&
-                            node.halfMoves % 2 === colorN
-                        ) {
-                            break;
-                        }
+                    // In practice mode, block navigation past the drill position
+                    if (practicePath && state.position.length >= practicePath.length) {
+                        return state;
                     }
 
-                    state.position = p;
-                }),
-            ),
+                    // In practice mode, follow the drill path; otherwise take first child
+                    const childIndex = practicePath ? practicePath[state.position.length] : 0;
 
-        makeMove: ({ payload, changePosition, mainline, clock, changeHeaders = true }) => {
-            set(
-                produce((state) => {
+                    const node = getNodeAtPath(state.root, state.position);
+                    if (!node || !node.children[childIndex]?.move) return state;
+                    const san = node.children[childIndex].san;
+                    if (!san) return state;
+                    playSound(san.includes("x"), san.includes("+"));
+                    return {
+                        ...state,
+                        position: [...state.position, childIndex],
+                    };
+                }),
+            goToPrevious: () =>
+                set((state) => ({
+                    ...state,
+                    position: state.position.slice(0, -1),
+                })),
+
+            goToAnnotation: (annotation, color) =>
+                set(
+                    produce((state) => {
+                        const colorN = color === "white" ? 1 : 0;
+
+                        let p: number[] = state.position;
+                        let node = getNodeAtPath(state.root, p);
+                        while (true) {
+                            if (node.children.length === 0) {
+                                p = [];
+                            } else {
+                                p.push(0);
+                            }
+
+                            node = getNodeAtPath(state.root, p);
+
+                            if (
+                                node.annotations.includes(annotation) &&
+                                node.halfMoves % 2 === colorN
+                            ) {
+                                break;
+                            }
+                        }
+
+                        state.position = p;
+                    }),
+                ),
+
+            makeMove: ({ payload, changePosition, mainline, clock, changeHeaders = true }) => {
+                commit((state) => {
                     if (typeof payload === "string") {
                         const node = getNodeAtPath(state.root, state.position);
                         if (!node) return;
@@ -204,20 +318,16 @@ export const createTreeStore = (id?: string, initialTree?: TreeState) => {
                         mainline,
                         clock,
                     });
-                }),
-            );
-        },
+                });
+            },
 
-        appendMove: ({ payload, clock }) =>
-            set(
-                produce((state) => {
+            appendMove: ({ payload, clock }) =>
+                commit((state) => {
                     makeMove({ state, move: payload, last: true, clock });
                 }),
-            ),
 
-        makeMoves: ({ payload, mainline, changeHeaders = true }) =>
-            set(
-                produce((state) => {
+            makeMoves: ({ payload, mainline, changeHeaders = true }) =>
+                commit((state) => {
                     state.dirty = true;
                     const node = getNodeAtPath(state.root, state.position);
                     const [pos] = positionFromFen(node.fen);
@@ -236,151 +346,150 @@ export const createTreeStore = (id?: string, initialTree?: TreeState) => {
                         });
                     }
                 }),
-            ),
-        goToEnd: () =>
-            set(
-                produce((state) => {
-                    const endPosition: number[] = [];
-                    let currentNode = state.root;
-                    while (currentNode.children.length > 0) {
-                        endPosition.push(0);
-                        currentNode = currentNode.children[0];
-                    }
-                    state.position = endPosition;
-                }),
-            ),
-        goToStart: () =>
-            set((state) => ({
-                ...state,
-                position: state.headers.start || [],
-            })),
-        goToMove: (move) =>
-            set((state) => ({
-                ...state,
-                position: move,
-            })),
-        goToBranchStart: () => {
-            set(
-                produce((state) => {
-                    if (
-                        state.position.length > 0 &&
-                        state.position[state.position.length - 1] !== 0
-                    ) {
-                        state.position = state.position.slice(0, -1);
-                    }
+            goToEnd: () =>
+                set(
+                    produce((state) => {
+                        const endPosition: number[] = [];
+                        let currentNode = state.root;
+                        while (currentNode.children.length > 0) {
+                            endPosition.push(0);
+                            currentNode = currentNode.children[0];
+                        }
+                        state.position = endPosition;
+                    }),
+                ),
+            goToStart: () =>
+                set((state) => ({
+                    ...state,
+                    position: state.headers.start || [],
+                })),
+            goToMove: (move) =>
+                set((state) => ({
+                    ...state,
+                    position: move,
+                })),
+            goToBranchStart: () => {
+                set(
+                    produce((state) => {
+                        if (
+                            state.position.length > 0 &&
+                            state.position[state.position.length - 1] !== 0
+                        ) {
+                            state.position = state.position.slice(0, -1);
+                        }
 
-                    while (
-                        state.position.length > 0 &&
-                        state.position[state.position.length - 1] === 0
-                    ) {
-                        state.position = state.position.slice(0, -1);
-                    }
-                }),
-            );
-        },
+                        while (
+                            state.position.length > 0 &&
+                            state.position[state.position.length - 1] === 0
+                        ) {
+                            state.position = state.position.slice(0, -1);
+                        }
+                    }),
+                );
+            },
 
-        goToBranchEnd: () => {
-            set(
-                produce((state) => {
-                    let currentNode = getNodeAtPath(state.root, state.position);
-                    while (currentNode.children.length > 0) {
-                        state.position.push(0);
-                        currentNode = currentNode.children[0];
-                    }
-                }),
-            );
-        },
+            goToBranchEnd: () => {
+                set(
+                    produce((state) => {
+                        let currentNode = getNodeAtPath(state.root, state.position);
+                        while (currentNode.children.length > 0) {
+                            state.position.push(0);
+                            currentNode = currentNode.children[0];
+                        }
+                    }),
+                );
+            },
 
-        nextBranch: () =>
-            set(
-                produce((state) => {
-                    if (state.position.length === 0) return;
+            nextBranch: () =>
+                set(
+                    produce((state) => {
+                        if (state.position.length === 0) return;
 
-                    const parent = getNodeAtPath(state.root, state.position.slice(0, -1));
-                    const branchIndex = state.position[state.position.length - 1];
-                    const node = parent.children[branchIndex];
+                        const parent = getNodeAtPath(state.root, state.position.slice(0, -1));
+                        const branchIndex = state.position[state.position.length - 1];
+                        const node = parent.children[branchIndex];
 
-                    // Makes the navigation more fluid and compatible with next/previous branching
-                    if (node.children.length >= 2 && parent.children.length <= 1) {
-                        state.position.push(0);
-                    }
+                        // Makes the navigation more fluid and compatible with next/previous branching
+                        if (node.children.length >= 2 && parent.children.length <= 1) {
+                            state.position.push(0);
+                        }
 
-                    state.position = [
-                        ...state.position.slice(0, -1),
-                        (branchIndex + 1) % parent.children.length,
-                    ];
-                }),
-            ),
-        previousBranch: () =>
-            set(
-                produce((state) => {
-                    if (state.position.length === 0) return;
+                        state.position = [
+                            ...state.position.slice(0, -1),
+                            (branchIndex + 1) % parent.children.length,
+                        ];
+                    }),
+                ),
+            previousBranch: () =>
+                set(
+                    produce((state) => {
+                        if (state.position.length === 0) return;
 
-                    const parent = getNodeAtPath(state.root, state.position.slice(0, -1));
-                    const branchIndex = state.position[state.position.length - 1];
-                    const node = parent.children[branchIndex];
+                        const parent = getNodeAtPath(state.root, state.position.slice(0, -1));
+                        const branchIndex = state.position[state.position.length - 1];
+                        const node = parent.children[branchIndex];
 
-                    // Makes the navigation more fluid and compatible with next/previous branching
-                    if (node.children.length >= 2 && parent.children.length <= 1) {
-                        state.position.push(0);
-                    }
+                        // Makes the navigation more fluid and compatible with next/previous branching
+                        if (node.children.length >= 2 && parent.children.length <= 1) {
+                            state.position.push(0);
+                        }
 
-                    state.position = [
-                        ...state.position.slice(0, -1),
-                        (branchIndex + parent.children.length - 1) % parent.children.length,
-                    ];
-                }),
-            ),
+                        state.position = [
+                            ...state.position.slice(0, -1),
+                            (branchIndex + parent.children.length - 1) % parent.children.length,
+                        ];
+                    }),
+                ),
 
-        nextBranching: () =>
-            set(
-                produce((state) => {
-                    let node = getNodeAtPath(state.root, state.position);
-                    let branchCount = node.children.length;
+            nextBranching: () =>
+                set(
+                    produce((state) => {
+                        let node = getNodeAtPath(state.root, state.position);
+                        let branchCount = node.children.length;
 
-                    if (branchCount === 0) return;
+                        if (branchCount === 0) return;
 
-                    do {
-                        state.position.push(0);
-                        node = node.children[0];
-                        branchCount = node.children.length;
-                    } while (branchCount === 1);
-                }),
-            ),
+                        do {
+                            state.position.push(0);
+                            node = node.children[0];
+                            branchCount = node.children.length;
+                        } while (branchCount === 1);
+                    }),
+                ),
 
-        previousBranching: () =>
-            set(
-                produce((state) => {
-                    let node = getNodeAtPath(state.root, state.position);
-                    let branchCount = node.children.length;
+            previousBranching: () =>
+                set(
+                    produce((state) => {
+                        let node = getNodeAtPath(state.root, state.position);
+                        let branchCount = node.children.length;
 
-                    if (state.position.length === 0) return;
+                        if (state.position.length === 0) return;
 
-                    do {
-                        state.position = state.position.slice(0, -1);
-                        node = getNodeAtPath(state.root, state.position);
-                        branchCount = node.children.length;
-                    } while (branchCount === 1 && state.position.length > 0);
-                }),
-            ),
+                        do {
+                            state.position = state.position.slice(0, -1);
+                            node = getNodeAtPath(state.root, state.position);
+                            branchCount = node.children.length;
+                        } while (branchCount === 1 && state.position.length > 0);
+                    }),
+                ),
 
-        deleteMove: (path) =>
-            set(
-                produce((state) => {
+            deleteMove: (path) => {
+                const before = get().root;
+                commit((state) => {
                     state.dirty = true;
                     deleteMove(state, path ?? state.position);
-                }),
-            ),
-        promoteVariation: (path) =>
-            set(
-                produce((state) => {
+                });
+                if (get().root !== before) {
+                    showDeletedNotification(id, () => get().undo());
+                }
+            },
+            promoteVariation: (path) =>
+                commit((state) => {
                     state.dirty = true;
                     promoteVariation(state, path);
                 }),
-            ),
-        promoteToMainline: (path) =>
-            set(
-                produce((state) => {
+            promoteToMainline: (path) =>
+                commit((state) => {
                     state.dirty = true;
                     let p = path;
                     while (p.some((v) => v !== 0)) {
@@ -388,40 +497,36 @@ export const createTreeStore = (id?: string, initialTree?: TreeState) => {
                         p = state.position;
                     }
                 }),
-            ),
-        copyVariationPgn: (path) => {
-            const { root } = get();
-            const pgn = getPGN(root, {
-                headers: null,
-                comments: false,
-                extraMarkups: false,
-                glyphs: true,
-                variations: false,
-                path,
-            });
-            navigator.clipboard.writeText(pgn);
-        },
-        copyPgn: () => {
-            const { root, headers } = get();
-            const pgn = getPGN(root, {
-                headers,
-                comments: true,
-                extraMarkups: true,
-                glyphs: true,
-                variations: true,
-            });
-            navigator.clipboard.writeText(pgn);
-        },
-        setStart: (start) =>
-            set(
-                produce((state) => {
+            copyVariationPgn: (path) => {
+                const { root } = get();
+                const pgn = getPGN(root, {
+                    headers: null,
+                    comments: false,
+                    extraMarkups: false,
+                    glyphs: true,
+                    variations: false,
+                    path,
+                });
+                navigator.clipboard.writeText(pgn);
+            },
+            copyPgn: () => {
+                const { root, headers } = get();
+                const pgn = getPGN(root, {
+                    headers,
+                    comments: true,
+                    extraMarkups: true,
+                    glyphs: true,
+                    variations: true,
+                });
+                navigator.clipboard.writeText(pgn);
+            },
+            setStart: (start) =>
+                commit((state) => {
                     state.dirty = true;
                     state.headers.start = start;
                 }),
-            ),
-        setAnnotation: (payload) =>
-            set(
-                produce((state) => {
+            setAnnotation: (payload) =>
+                commit((state) => {
                     state.dirty = true;
                     const node = getNodeAtPath(state.root, state.position);
                     if (node) {
@@ -439,20 +544,16 @@ export const createTreeStore = (id?: string, initialTree?: TreeState) => {
                         }
                     }
                 }),
-            ),
-        setComment: (payload) =>
-            set(
-                produce((state) => {
+            setComment: (payload) =>
+                commit((state) => {
                     state.dirty = true;
                     const node = getNodeAtPath(state.root, state.position);
                     if (node) {
                         node.comment = payload;
                     }
                 }),
-            ),
-        setHeaders: (headers) =>
-            set(
-                produce((state) => {
+            setHeaders: (headers) =>
+                commit((state) => {
                     state.dirty = true;
                     state.headers = headers;
                     if (headers.fen && headers.fen !== state.root.fen) {
@@ -460,70 +561,137 @@ export const createTreeStore = (id?: string, initialTree?: TreeState) => {
                         state.position = [];
                     }
                 }),
-            ),
-        setResult: (result) =>
-            set(
-                produce((state) => {
+            setResult: (result) =>
+                commit((state) => {
                     state.dirty = true;
                     state.headers.result = result;
                 }),
-            ),
-        setShapes: (shapes) =>
-            set(
-                produce((state) => {
+            setShapes: (shapes) =>
+                commit((state) => {
                     state.dirty = true;
                     setShapes(state, shapes);
                 }),
-            ),
-        setScore: (score) =>
-            set(
-                produce((state) => {
-                    state.dirty = true;
-                    const node = getNodeAtPath(state.root, state.position);
-                    if (node) {
-                        node.score = score;
-                    }
-                }),
-            ),
-        addAnalysis: (analysis, options) =>
-            set(
-                produce((state) => {
+            setScore: (
+                pathOrScore: number[] | Score,
+                maybeScore?: Score,
+                opts?: SetScoreOptions,
+            ) => {
+                const explicitPath = Array.isArray(pathOrScore) ? pathOrScore : null;
+                const score = Array.isArray(pathOrScore) ? maybeScore : pathOrScore;
+                if (!score) return;
+                const apply = (state: Draft<TreeStoreState>) => {
+                    const node = getNodeAtPathStrict(state.root, explicitPath ?? state.position);
+                    if (!node) return false;
+                    node.score = score;
+                    return true;
+                };
+                if (opts?.transient) {
+                    set((state) =>
+                        produce(state, (draft) => {
+                            apply(draft);
+                        }),
+                    );
+                } else {
+                    commit((state) => {
+                        if (apply(state)) {
+                            state.dirty = true;
+                        }
+                    });
+                }
+            },
+            addAnalysis: (analysis, options) =>
+                commit((state) => {
                     state.dirty = true;
                     addAnalysis(state, analysis, options);
                 }),
-            ),
 
-        setReportInProgress: (value: boolean) => {
-            set(
-                produce((state: Draft<TreeStoreState>) => {
-                    state.report.inProgress = value;
-                }),
-            );
-        },
+            setReportInProgress: (value: boolean) => {
+                set(
+                    produce((state: Draft<TreeStoreState>) => {
+                        state.report.inProgress = value;
+                    }),
+                );
+            },
 
-        clearShapes: () =>
-            set(
-                produce((state) => {
+            clearShapes: () =>
+                commit((state) => {
                     const node = getNodeAtPath(state.root, state.position);
                     if (node && node.shapes.length > 0) {
                         state.dirty = true;
                         node.shapes = [];
                     }
                 }),
-            ),
-    });
+        };
+    };
 
     if (id) {
         return createStore<TreeStoreState>()(
             persist(stateCreator, {
                 name: id,
-                storage: createDebouncedSessionStorage<TreeStoreState>(),
+                storage: createDebouncedSessionStorage<PersistedTreeState>(),
+                // History lives in the closure above and is never persisted;
+                // the flags derived from it must not survive a reload either.
+                partialize: (state) => {
+                    const { canUndo: _canUndo, canRedo: _canRedo, ...persisted } = state;
+                    return persisted;
+                },
+                merge: (persisted, current) => {
+                    const stored = (persisted ?? {}) as Partial<PersistedTreeState>;
+                    const merged = { ...current, ...stored, canUndo: false, canRedo: false };
+                    merged.root = ensureNodeIds(merged.root);
+                    return merged;
+                },
             }),
         );
     }
 
     return createStore<TreeStoreState>()(stateCreator);
 };
+
+/** Like `getNodeAtPath` but returns null when the path does not exist. */
+function getNodeAtPathStrict<T extends { children: T[] }>(root: T, path: number[]): T | null {
+    let node = root;
+    for (const index of path) {
+        const child = node.children[index];
+        if (!child) return null;
+        node = child;
+    }
+    return node;
+}
+
+// Mantine's polymorphic component types do not fit `createElement`'s overloads;
+// this is a .ts file, so narrow them to plain function components.
+const UndoButton = Button as unknown as FunctionComponent<
+    ButtonProps & { onClick: () => void; children?: ReactNode }
+>;
+const Label = Text as unknown as FunctionComponent<TextProps & { children?: ReactNode }>;
+
+function showDeletedNotification(storeId: string | undefined, undo: () => void) {
+    const notificationId = `tree-deleted-${storeId ?? "anonymous"}`;
+    // Mantine ignores `show` for an id that is still visible: replace it instead.
+    notifications.hide(notificationId);
+    notifications.show({
+        id: notificationId,
+        autoClose: 5000,
+        message: createElement(
+            Group,
+            { justify: "space-between", wrap: "nowrap", gap: "xs" },
+            createElement(Label, { size: "sm" }, i18n.t("Tree.Deleted")),
+            createElement(
+                UndoButton,
+                {
+                    size: "compact-xs",
+                    variant: "light",
+                    onClick: () => {
+                        notifications.hide(notificationId);
+                        undo();
+                    },
+                },
+                i18n.t("Tree.Undo"),
+            ),
+        ),
+    });
+}
 
 function makeMove({
     state,
@@ -643,6 +811,7 @@ function deleteMove(state: TreeState, path: number[]) {
     const parent = getNodeAtPath(state.root, path.slice(0, -1));
     if (!parent) return;
     const index = parent.children.findIndex((n) => n === node);
+    if (index === -1) return;
     parent.children.splice(index, 1);
     if (isPrefix(path, state.position)) {
         state.position = path.slice(0, -1);

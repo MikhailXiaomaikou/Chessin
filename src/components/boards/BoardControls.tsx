@@ -18,6 +18,7 @@ import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { memo, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import { useBoardOrientation } from "@/chessin/board/orientationAtom";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import {
   autoSaveAtom,
@@ -53,8 +54,6 @@ function BoardControls({
 
   const store = useContext(TreeStateContext)!;
   const headers = useStore(store, (s) => s.headers);
-  const root = useStore(store, (s) => s.root);
-  const setHeaders = useStore(store, (s) => s.setHeaders);
   const clearShapes = useStore(store, (s) => s.clearShapes);
 
   const keyMap = useAtomValue(keyMapAtom);
@@ -63,13 +62,11 @@ function BoardControls({
   const autoSave = useAtomValue(autoSaveAtom);
   const eraseDrawablesOnClick = useAtomValue(eraseDrawablesOnClickAtom);
 
-  const orientation = headers.orientation || "white";
-  const toggleOrientation = () =>
-    setHeaders({
-      ...headers,
-      fen: root.fen,
-      orientation: orientation === "black" ? "white" : "black",
-    });
+  // Chessin: orientation is view state, never written to the PGN headers.
+  const [orientation, toggleOrientation] = useBoardOrientation(
+    currentTab?.value,
+    headers.orientation,
+  );
 
   function changeTabType() {
     setCurrentTab((t) => {

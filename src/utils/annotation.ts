@@ -9,7 +9,8 @@ export function addPieceSymbol(move: string): string {
     return pieceChar + move.slice(1);
 }
 
-export type Annotation =
+/** Annotations with a dedicated glyph and UI entry. */
+export type KnownAnnotation =
     | ""
     | "!"
     | "!!"
@@ -37,6 +38,20 @@ export type Annotation =
     | "⨀"
     | "⊗";
 
+/**
+ * A numeric annotation glyph without a dedicated symbol (e.g. `$33`,
+ * black's counterpart of `$32`). It is stored verbatim so that every NAG of
+ * an imported PGN re-serialises unchanged.
+ */
+export type NagAnnotation = `$${number}`;
+
+export type Annotation = KnownAnnotation | NagAnnotation;
+
+/**
+ * Canonical NAG -> glyph mapping. Only the NAG an annotation serialises to is
+ * listed (see `ANNOTATION_INFO[x].nag`); every other NAG, including the
+ * "black" counterparts such as `$33`, stays a `NagAnnotation`.
+ */
 export const NAG_INFO = new Map<string, Annotation>([
     ["$1", "!"],
     ["$2", "?"],
@@ -55,19 +70,12 @@ export const NAG_INFO = new Map<string, Annotation>([
     ["$18", "+-"],
     ["$19", "-+"],
     ["$22", "⨀"],
-    ["$23", "⨀"],
     ["$32", "↑↑"],
-    ["$33", "↑↑"],
     ["$36", "↑"],
-    ["$37", "↑"],
     ["$40", "→"],
-    ["$41", "→"],
     ["$44", "=∞"],
-    ["$45", "=∞"],
     ["$132", "⇆"],
-    ["$133", "⇆"],
     ["$138", "⊕"],
-    ["$139", "⊕"],
     ["$140", "∆"],
     ["$146", "N"],
 ]);
@@ -80,7 +88,7 @@ type AnnotationInfo = {
     nag: number;
 };
 
-export const ANNOTATION_INFO: Record<Annotation, AnnotationInfo> = {
+const KNOWN_ANNOTATION_INFO: Record<KnownAnnotation, AnnotationInfo> = {
     "": { name: "None", translationKey: "None", color: "gray", nag: 0 },
     "!!": {
         group: "basic",
@@ -188,6 +196,60 @@ export const ANNOTATION_INFO: Record<Annotation, AnnotationInfo> = {
     "⨀": { name: "Zugzwang", translationKey: "Zugzwang", nag: 22 },
     "⊗": { name: "Miss", translationKey: "Miss", color: "red", nag: 9 },
 };
+
+const nagAnnotationInfo = new Map<NagAnnotation, AnnotationInfo>();
+
+/**
+ * Annotation metadata. Unknown NAGs (`$n`) are synthesised on access so that
+ * `ANNOTATION_INFO[a].nag` / `.group` is always safe; `Object.keys` still
+ * lists only the known glyphs.
+ */
+export const ANNOTATION_INFO: Record<Annotation, AnnotationInfo> = new Proxy(
+    KNOWN_ANNOTATION_INFO,
+    {
+        get(target, prop, receiver) {
+            if (typeof prop === "string" && isNagAnnotation(prop) && !(prop in target)) {
+                let info = nagAnnotationInfo.get(prop);
+                if (!info) {
+                    info = { name: prop, nag: Number.parseInt(prop.slice(1), 10) };
+                    nagAnnotationInfo.set(prop, info);
+                }
+                return info;
+            }
+            return Reflect.get(target, prop, receiver);
+        },
+    },
+) as Record<Annotation, AnnotationInfo>;
+
+export function isNagAnnotation(annotation: string): annotation is NagAnnotation {
+    return /^\$\d+$/.test(annotation);
+}
+
+/** The NAG number an annotation serialises to (`0` for the empty annotation). */
+export function annotationToNag(annotation: Annotation): number {
+    if (isNagAnnotation(annotation)) {
+        return Number.parseInt(annotation.slice(1), 10);
+    }
+    return KNOWN_ANNOTATION_INFO[annotation]?.nag ?? 0;
+}
+
+/**
+ * Converts a NAG token (`"$14"`, `"14"` or `14`) to an annotation. Known NAGs
+ * become their glyph, `$0` the empty annotation and everything else a
+ * `NagAnnotation` so it round-trips unchanged.
+ */
+export function nagToAnnotation(nag: string | number): Annotation {
+    const n = typeof nag === "number" ? nag : Number.parseInt(nag.replace(/^\$/, ""), 10);
+    if (!Number.isInteger(n) || n <= 0) {
+        return "";
+    }
+    return NAG_INFO.get(`$${n}`) ?? `$${n}`;
+}
+
+/** Deterministic ordering by NAG number. */
+export function compareAnnotations(a: Annotation, b: Annotation): number {
+    return annotationToNag(a) - annotationToNag(b);
+}
 
 export function isBasicAnnotation(
     annotation: string,

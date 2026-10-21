@@ -32,11 +32,8 @@ import { useTranslation } from "react-i18next";
 import useSWR from "swr";
 import type { DatabaseInfo } from "@/bindings";
 import { commands } from "@/bindings";
-import {
-  databaseConversionStateAtom,
-  referenceDbAtom,
-  storedDatabasesDirAtom,
-} from "@/state/atoms";
+import { DEFAULT_SOURCE, defaultSourceAtom, localSource } from "@/chessin/sources/sources";
+import { databaseConversionStateAtom, storedDatabasesDirAtom } from "@/state/atoms";
 import { useActiveDatabaseViewStore } from "@/state/store/database";
 import { getDatabases, type SuccessDatabaseInfo } from "@/utils/db";
 import { formatBytes, formatNumber } from "@/utils/format";
@@ -55,7 +52,9 @@ export default function DatabasesPage() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [referenceDatabase, setReferenceDatabase] = useAtom(referenceDbAtom);
+  // Chessin (IA-3 v0): "reference database" became the app-wide default source.
+  const [defaultSource, setDefaultSource] = useAtom(defaultSourceAtom);
+  const defaultLocalPath = defaultSource.kind === "local" ? defaultSource.path : null;
   const [conversionState, setConversionState] = useAtom(databaseConversionStateAtom);
   const selectedDatabase = useMemo(
     () => (databases ?? []).find((db) => db.file === selected) ?? null,
@@ -92,19 +91,31 @@ export default function DatabasesPage() {
   // const [, setStorageSelected] = useAtom(selectedDatabaseAtom);
   const setActiveDatabase = useActiveDatabaseViewStore((store) => store.setDatabase);
 
-  const isReference = referenceDatabase === selectedDatabase?.file;
+  const isDefaultSource = defaultLocalPath !== null && defaultLocalPath === selectedDatabase?.file;
 
   const [deleteModal, toggleDeleteModal] = useToggle();
   const [exportLoading, setExportLoading] = useState(false);
 
-  function changeReferenceDatabase(file: string) {
+  // Toggling the default on a database that already is the default falls back
+  // to the built-in default (Lichess Masters), never to "nothing".
+  function toggleDefaultSource(db: SuccessDatabaseInfo) {
     commands.clearGames();
-    if (file === referenceDatabase) {
-      setReferenceDatabase(null);
-    } else {
-      setReferenceDatabase(file);
-    }
+    setDefaultSource(
+      db.file === defaultLocalPath ? DEFAULT_SOURCE : localSource(db.file, db.title),
+    );
   }
+
+  // Keep the stored title in step with renames (and upgrade the filename-derived
+  // title a migrated profile starts with).
+  useEffect(() => {
+    if (defaultSource.kind !== "local") return;
+    const live = (databases ?? []).find(
+      (db): db is SuccessDatabaseInfo => db.type === "success" && db.file === defaultSource.path,
+    );
+    if (live && live.title && live.title !== defaultSource.title) {
+      setDefaultSource(localSource(live.file, live.title));
+    }
+  }, [databases, defaultSource, setDefaultSource]);
   const navigate = useNavigate();
 
   return (
@@ -116,6 +127,9 @@ export default function DatabasesPage() {
         onClose={toggleDeleteModal}
         onConfirm={() => {
           if (!selectedDatabase) return;
+          if (selectedDatabase.file === defaultLocalPath) {
+            setDefaultSource(DEFAULT_SOURCE);
+          }
           commands.deleteDatabase(selectedDatabase.file).then(() => {
             mutate();
             setSelected(null);
@@ -241,13 +255,17 @@ export default function DatabasesPage() {
                               </Text>
                             </Box>
                           </Group>
-                          <Rating
-                            value={referenceDatabase === item.file ? 1 : 0}
-                            count={1}
-                            onChange={() => {
-                              changeReferenceDatabase(item.file);
-                            }}
-                          />
+                          {item.type === "success" && (
+                            <Tooltip label={t("Sources.SetAsDefaultSource")}>
+                              <Rating
+                                value={defaultLocalPath === item.file ? 1 : 0}
+                                count={1}
+                                onChange={() => {
+                                  toggleDefaultSource(item);
+                                }}
+                              />
+                            </Tooltip>
+                          )}
                         </Group>
                       }
                       stats={[
@@ -326,10 +344,11 @@ export default function DatabasesPage() {
                       mutate={mutate}
                     />
                     <Checkbox
-                      label={t("Databases.Settings.ReferenceDatabase")}
-                      checked={isReference}
+                      label={t("Sources.SetAsDefaultSource")}
+                      description={t("Sources.SetAsDefaultSource.Desc")}
+                      checked={isDefaultSource}
                       onChange={() => {
-                        changeReferenceDatabase(selectedDatabase.file);
+                        toggleDefaultSource(selectedDatabase);
                       }}
                     />
                     <IndexInput
