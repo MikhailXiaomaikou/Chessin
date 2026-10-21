@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-chessin-ping"
+description = "Enables the chessin_ping command without any pre-configured scope."
+commands.allow = ["chessin_ping"]
+
+[[permission]]
+identifier = "deny-chessin-ping"
+description = "Denies the chessin_ping command without any pre-configured scope."
+commands.deny = ["chessin_ping"]

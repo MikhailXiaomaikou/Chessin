@@ -1,0 +1,21 @@
+[package]
+name = "tauri-plugin-chessin"
+version = "0.1.0"
+description = "Tauri plugin that registers Chessin's commands and events with the app"
+license = "GPL-3.0-only"
+repository = "https://github.com/MikhailXiaomaikou/Chessin"
+edition = "2021"
+publish = false
+# Required by `tauri_plugin::Builder`: lets the app's `tauri-build` find this
+# plugin's permission files (`chessin:*`) through `DEP_TAURI_PLUGIN_CHESSIN_*`.
+links = "tauri-plugin-chessin"
+
+[build-dependencies]
+tauri-plugin = { workspace = true, features = ["build"] }
+
+[dependencies]
+chessin-core = { workspace = true }
+tauri = { workspace = true }
+specta = { workspace = true }
+specta-typescript = { workspace = true }
+tauri-specta = { workspace = true }

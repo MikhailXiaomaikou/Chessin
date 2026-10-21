@@ -1,0 +1,23 @@
+[package]
+name = "vampirc-uci"
+version = "0.11.1"
+description = "A Universal Chess Interface (UCI) protocol parser and serializer. Part of the Vampirc chess suite."
+documentation = "https://docs.rs/vampirc_uci"
+homepage = "https://vampirc.kejzar.si"
+repository = "https://github.com/vampirc/vampirc-uci.git"
+categories = ["parser-implementations", "game-engines"]
+license = "Apache-2.0"
+readme = "README.md"
+keywords = ["uci", "chess", "parser"]
+authors = ["Matija Kejžar <matija@kejzar.si>"]
+edition = "2018"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+pest = "2.1"
+pest_derive = "2.1"
+chrono = "0.4"
+specta = { version = "2.0.0-rc.7", optional = true }
+serde = { version = "1", optional = true }

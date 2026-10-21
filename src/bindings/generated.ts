@@ -302,9 +302,9 @@ async writeGame(filePath: string, n: number, pgn: string) : Promise<Result<null,
     else return { status: "error", error: e  as any };
 }
 },
-async downloadFile(id: string, url: string, path: string, token: string | null, finalize: boolean | null, totalSize: number | null) : Promise<Result<null, string>> {
+async downloadFile(id: string, url: string, path: string, token: string | null, finalize: boolean | null, totalSize: number | null, sha256: string | null) : Promise<Result<null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("download_file", { id, url, path, token, finalize, totalSize }) };
+    return { status: "ok", data: await TAURI_INVOKE("download_file", { id, url, path, token, finalize, totalSize, sha256 }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

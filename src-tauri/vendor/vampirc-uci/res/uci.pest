@@ -1,0 +1,194 @@
+WHITESPACE = _{ " " | "\t" }
+PLUS = _{"+"}
+MINUS = _{"-"}
+
+commands = _{ SOI ~ ws_nl* ~ message* ~ message_no_nl? ~ !any}
+
+commands_ignore_unknown = _{ SOI ~ ws_nl* ~ (message | something)* ~message_no_nl? ~ WHITESPACE*}
+
+commands_with_unknown = _{ SOI ~ ws_nl* ~ (message|something_produced_nl)* ~ (message_no_nl|something_produced)? ~ !any}
+
+message = _{ message_no_nl ~ NEWLINE+}
+
+message_no_nl = _{ WHITESPACE* ~ (uci | debug | isready | setoption | register | ucinewgame | stop | ponderhit | quit |
+                            position | go | id | uciok | readyok | bestmove | copyprotection | registration | option | info) ~
+                            WHITESPACE*}
+
+single_message_per_line = _{message_no_nl ~ NEWLINE? }
+
+uci = ${ ^"uci" ~ (!non_ws | EOI) }
+
+switch = { ^"on" | ^"off" }
+debug = ${ ^"debug" ~ WHITESPACE+ ~ switch }
+
+isready = { ^"isready" }
+
+setoption = ${^"setoption" ~ WHITESPACE+ ~ ^"name" ~ WHITESPACE+ ~ option_internal }
+option_internal = ${ option_name ~ (WHITESPACE+ ~ (^"value" ~ WHITESPACE+ ~ option_value))? }
+option_name = ${ option_token ~ (WHITESPACE+ ~ option_token)* }
+option_token = _{ !^"value" ~ token }
+option_value = { any+ }
+
+register = ${ ^"register" ~ WHITESPACE+ ~ (register_later | register_nc) }
+register_later = ${ ^"later" ~ (!non_ws | EOI) }
+register_nc = ${ ^"name" ~ WHITESPACE+ ~ register_name ~ WHITESPACE+ ~ ^"code" ~ WHITESPACE+ ~ register_code }
+register_name = ${ register_token ~ (WHITESPACE+ ~ register_token)* }
+register_token = _{ !^"code" ~ token }
+register_code = { any+ }
+
+ucinewgame = { ^"ucinewgame" }
+
+stop = ${ ^"stop" ~ (!non_ws | EOI) }
+
+quit = ${ ^"quit" ~ (!non_ws | EOI) }
+
+ponderhit = { ^"ponderhit" }
+
+position = ${ ^"position" ~ WHITESPACE+ ~ (fen_pos | startpos) ~ WHITESPACE* ~ (^"moves" ~WHITESPACE ~ a_move ~
+        (WHITESPACE+ ~ a_move)*)* }
+square = ${ file ~ rank }
+from_sq = { square }
+to_sq = { square }
+a_move = ${from_sq ~ to_sq ~ promotion? }
+promotion = { ^"q" | ^"r" | ^"n" | ^"b" }
+startpos = ${ ^"startpos" }
+piece_char = { ^"k" | ^"q" | ^"r" | ^"n" | ^"b" | ^"p" }
+rank = { '1'..'8' }
+file = { ('a'..'h') | ('A'..'H') }
+
+// FEN stuff
+fen_pos = _{ ^"fen" ~ WHITESPACE+ ~ fen }
+fen = ${ (fen_rank ~ rank_sep){7} ~ fen_rank ~ WHITESPACE+ ~ color ~ WHITESPACE+ ~ castling ~ WHITESPACE+ ~ en_passant
+        ~ WHITESPACE+ ~ ply_clock ~ WHITESPACE+ ~ move_num }
+rank_sep = _{ "/" }
+fen_rank = { (piece_char | rank){1,8} }
+color = {^"w" | ^"b"}
+fen_none = { "-" }
+castling_chars = { ^"k" | ^"q" }
+castling = { castling_chars{1,4} | fen_none }
+en_passant = { square | fen_none }
+counter = _{ digit{1,4} }
+ply_clock = { counter }
+move_num = { counter }
+
+// GO
+go = {go_full | go_empty}
+go_empty = ${ ^"go" ~ WHITESPACE* ~  (EOI | NEWLINE) }
+go_full = ${ ^"go" ~ (WHITESPACE+  ~ (go_time | go_search | EOI | NEWLINE))+ }
+go_time = { go_ponder | go_infinite | go_movetime | go_timeleft }
+go_ponder = ${ ^"ponder" ~ (!non_ws | EOI) }
+go_infinite = ${ ^"infinite" ~ (!non_ws | EOI) }
+go_movetime = ${ ^"movetime" ~ WHITESPACE+ ~ milliseconds }
+go_timeleft = ${ (wtime | btime | winc | binc | movestogo)+ }
+wtime = ${ ^"wtime" ~ WHITESPACE+ ~ milliseconds}
+btime = ${ ^"btime" ~ WHITESPACE+ ~ milliseconds}
+winc = ${ ^"winc" ~ WHITESPACE+ ~ milliseconds}
+binc = ${ ^"binc" ~ WHITESPACE+ ~ milliseconds}
+movestogo = ${ ^"movestogo" ~ WHITESPACE+ ~ number}
+go_search = { depth | nodes | mate | searchmoves }
+depth = ${ ^"depth" ~WHITESPACE+ ~ number }
+nodes = ${ ^"nodes" ~WHITESPACE+ ~ number }
+mate = ${ ^"mate" ~WHITESPACE+ ~ number }
+searchmoves = ${ ^"searchmoves" ~ (WHITESPACE+ ~ a_move)+ }
+
+// GUI-bound stuff
+
+// id
+id = ${ ^"id" ~ WHITESPACE+ ~ (id_name|id_author) }
+id_name = ${ ^"name" ~ WHITESPACE+ ~ id_text }
+id_author = ${ ^"author" ~ WHITESPACE+ ~ id_text }
+id_text = ${ any+ }
+
+uciok = { ^"uciok" }
+
+readyok = { ^"readyok" }
+
+bestmove = ${ ^"bestmove" ~ WHITESPACE+ ~ a_move ~ (WHITESPACE+ | bestmove_ponder)* }
+bestmove_ponder = ${ ^"ponder" ~ WHITESPACE+ ~ a_move }
+
+copyprotection = ${ ^"copyprotection" ~ WHITESPACE+ ~ (protection_checking | protection_ok | protection_error) }
+registration = ${ ^"registration" ~ WHITESPACE+ ~ (protection_checking | protection_ok | protection_error) }
+protection_checking = { ^"checking" }
+protection_ok = { ^"ok" }
+protection_error = { ^"error" }
+
+// option
+option = ${ ^"option" ~ WHITESPACE+ ~ ^"name" ~ WHITESPACE+ ~ option_name2 ~ WHITESPACE+ ~ ^"type" ~ WHITESPACE+ ~ option_type
+~ ((WHITESPACE+ ~ ^"default" ~ WHITESPACE+ ~ option_default)? ~ (WHITESPACE+ ~ ^"min" ~ WHITESPACE+ ~ option_min)? ~
+ (WHITESPACE+ ~ ^"max" ~ WHITESPACE+ ~ option_max)? ~ (WHITESPACE+ ~ ^"var" ~ WHITESPACE+ ~ option_var)*)? }
+option_name2 = ${ (!^"type" ~ token) ~ (WHITESPACE+ ~ !^"type" ~ token+)* }
+option_type = ${ option_check | option_spin | option_combo | option_string | option_button }
+option_check = { ^"check" }
+option_spin = { ^"spin" }
+option_combo = { ^"combo" }
+option_string = { ^"string" }
+option_button = { ^"button" }
+option_default = {!(^"min" | ^"max" | ^"var") ~ token ~ (WHITESPACE+ ~ !(^"min" | ^"max" | ^"var") ~ token+)*}
+option_min = { number }
+option_max = { number }
+option_var = { !^"var" ~ token ~ (WHITESPACE+ ~ !^"var" ~ token+)* }
+
+// info
+// e.g. "info currmove e2e4 currmovenumber 1" or
+// 	     "info depth 12 nodes 123456 nps 100000".
+// 	Also all infos belonging to the pv should be sent together
+// 	e.g. "info depth 2 score cp 214 time 1242 nodes 2124 nps 34928 pv e2e4 e7e5 g1f3"
+
+info_keyword_item = {
+    ^"depth" | ^"seldepth" | ^"time" | ^"nodes" | ^"pv" | ^"score" |
+    ^"currmovenum" | ^"currmove" | ^"hashfull" | ^"nps" | ^"tbhits" | 
+    ^"sbhits" | ^"cpuload" | ^"string" | ^"refutation" | ^"currline" | 
+    ^"multipv"
+}
+info_keyword = @{ info_keyword_item ~ !token_char }
+token_char = _{ !(WHITESPACE | NEWLINE) ~ ANY }
+info_next_key = _{ WHITESPACE+ ~ info_keyword }
+info_value_bounded = ${ ( !info_next_key ~ any )+ }
+info_any = ${ token ~ WHITESPACE+ ~ info_value_bounded }
+
+info = ${^"info" ~ (WHITESPACE+ ~ info_attribute)+ }
+info_attribute = { info_depth | info_seldepth | info_time | info_nodes | info_currmovenum | info_currmove | info_hashfull | info_nps |
+ info_tbhits | info_sbhits | info_cpuload | info_string | info_pv | info_multipv | info_refutation | info_currline |
+ info_score | info_any }
+info_depth = ${ ^"depth" ~ WHITESPACE+ ~ number }
+info_seldepth = ${ ^"seldepth" ~ WHITESPACE+ ~ number }
+info_time = ${ ^"time" ~ WHITESPACE+ ~ number }
+info_nodes = ${ ^"nodes" ~ WHITESPACE+ ~ number }
+info_currmove = ${ ^"currmove" ~ WHITESPACE+ ~ a_move }
+info_currmovenum = ${ ^"currmovenum" ~ WHITESPACE+ ~ number }
+info_hashfull = ${ ^"hashfull" ~ WHITESPACE+ ~ number }
+info_nps = ${ ^"nps" ~ WHITESPACE+ ~ number }
+info_tbhits = ${ ^"tbhits" ~ WHITESPACE+ ~ number }
+info_sbhits = ${ ^"sbhits" ~ WHITESPACE+ ~ number }
+info_cpuload = ${ ^"cpuload" ~ WHITESPACE+ ~ number }
+info_string = ${ ^"string" ~ WHITESPACE+ ~ info_string_string }
+info_string_string = { any+ }
+info_pv = ${ ^"pv" ~ (WHITESPACE+ ~ a_move)+ }
+info_multipv = ${ ^"multipv" ~ WHITESPACE+ ~ number }
+info_refutation = ${ ^"refutation" ~ (WHITESPACE+ ~ a_move)+ }
+info_currline = ${ ^"currline" ~ (WHITESPACE+ ~ info_cpunr)* ~ (WHITESPACE+ ~ a_move)+ }
+info_cpunr = { number }
+info_score = ${ ^"score" ~ WHITESPACE+ ~ (info_cp | info_mate) ~ (WHITESPACE+ ~ info_wdl)? ~ (WHITESPACE+ ~ (info_lowerbound | info_upperbound))* }
+info_cp = ${ ^"cp" ~ WHITESPACE+ ~ number }
+info_mate = ${ ^"mate" ~ WHITESPACE+ ~ number }
+info_wdl = ${ ^"wdl" ~ WHITESPACE+ ~ number ~ WHITESPACE+ ~ number ~ WHITESPACE+ ~ number }
+info_lowerbound = { ^"lowerbound" }
+info_upperbound = { ^"upperbound" }
+
+
+
+sign = _{PLUS | MINUS}
+milliseconds = {sign? ~ digit{1,12} }
+number = {sign? ~ digit{1,12} }
+
+
+token = @{ (!(WHITESPACE | NEWLINE) ~ ANY)+ }
+any = _{ !NEWLINE ~ ANY }
+
+alpha = { 'a'..'z' | 'A'..'Z' }
+digit = { '0'..'9' }
+non_ws = _{!(WHITESPACE | NEWLINE) ~ ANY*}
+ws_nl = _{ WHITESPACE | NEWLINE }
+something = _{ any+ ~ NEWLINE+}
+something_produced = @{ any+ }
+something_produced_nl = @{ any+ ~ NEWLINE+}

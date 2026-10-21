@@ -242,6 +242,7 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_chessin::init())
         .setup(move |app| {
             log::info!("Setting up application");
 

@@ -25,7 +25,7 @@ import { useTranslation } from "react-i18next";
 import type { KeyedMutator } from "swr";
 import { commands, type DatabaseInfo } from "@/bindings";
 import { databaseConversionStateAtom, storedDatabasesDirAtom } from "@/state/atoms";
-import { getDatabases, type SuccessDatabaseInfo, useDefaultDatabases } from "@/utils/db";
+import { type CatalogDatabaseInfo, getDatabases, useDefaultDatabases } from "@/utils/db";
 import { capitalize, formatBytes, formatNumber } from "@/utils/format";
 import { unwrap } from "@/utils/unwrap";
 import FileInput from "../common/FileInput";
@@ -216,7 +216,7 @@ function DatabaseCard({
   initInstalled,
 }: {
   setDatabases: KeyedMutator<DatabaseInfo[]>;
-  database: SuccessDatabaseInfo;
+  database: CatalogDatabaseInfo;
   databaseId: number;
   initInstalled: boolean;
 }) {
@@ -225,10 +225,10 @@ function DatabaseCard({
 
   const [inProgress, setInProgress] = useState<boolean>(false);
 
-  async function downloadDatabase(id: number, url: string, name: string) {
+  async function downloadDatabase(id: number, url: string, name: string, sha256: string | null) {
     setInProgress(true);
     const path = await resolve(databaseDir, `${name}.db3`);
-    await commands.downloadFile(`db_${id}`, url, path, null, null, null);
+    await commands.downloadFile(`db_${id}`, url, path, null, null, null, sha256);
     await setDatabases(await getDatabases());
   }
 
@@ -276,7 +276,14 @@ function DatabaseCard({
               inProgress: t("Common.Downloading"),
               finalizing: t("Common.Extracting"),
             }}
-            onClick={() => downloadDatabase(databaseId, database.downloadLink!, database.title!)}
+            onClick={() =>
+              downloadDatabase(
+                databaseId,
+                database.downloadLink!,
+                database.title!,
+                database.sha256 ?? null,
+              )
+            }
             inProgress={inProgress}
             setInProgress={setInProgress}
           />

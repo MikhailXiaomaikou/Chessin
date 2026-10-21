@@ -205,14 +205,14 @@ function EngineCard({
   const [inProgress, setInProgress] = useState<boolean>(false);
   const [, setEngines] = useAtom(enginesAtom);
   const downloadEngine = useCallback(
-    async (id: number, url: string) => {
+    async (id: number, url: string, sha256: string | null) => {
       setInProgress(true);
       const enginesDir = await getEnginesDir();
       let path = await resolve(enginesDir, `${url.slice(url.lastIndexOf("/") + 1)}`);
       if (/\.(?:zip|tar|tar\.gz)(?:[?#]|$)/.test(url)) {
         path = enginesDir;
       }
-      await commands.downloadFile(`engine_${id}`, url, path, null, null, null);
+      await commands.downloadFile(`engine_${id}`, url, path, null, null, null, sha256);
       let enginesDirPath = enginesDir;
       if (enginesDirPath.endsWith("/") || enginesDirPath.endsWith("\\")) {
         enginesDirPath = enginesDirPath.slice(0, -1);
@@ -275,7 +275,7 @@ function EngineCard({
             }}
             onClick={() => {
               if (!engine.downloadLink) return;
-              downloadEngine(engineId, engine.downloadLink);
+              downloadEngine(engineId, engine.downloadLink, engine.sha256 ?? null);
             }}
             inProgress={inProgress}
             setInProgress={setInProgress}

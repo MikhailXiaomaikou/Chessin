@@ -45,6 +45,8 @@ const localEngineSchema = z.object({
     elo: z.number().nullish(),
     downloadSize: z.number().nullish(),
     downloadLink: z.string().nullish(),
+    /** Hex SHA-256 of the file at `downloadLink`; verified by `download_file` when set. */
+    sha256: z.string().nullish(),
     loaded: z.boolean().nullish(),
     go: goModeSchema.nullish(),
     enabled: z.boolean().nullish(),

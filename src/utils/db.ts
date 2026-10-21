@@ -19,6 +19,19 @@ import { unwrap } from "./unwrap";
 
 export type SuccessDatabaseInfo = Extract<DatabaseInfo, { type: "success" }>;
 
+/** Entry of `catalog/databases.json`. */
+export type CatalogDatabaseInfo = SuccessDatabaseInfo & {
+    /** Hex SHA-256 of the file at `downloadLink`; verified by `download_file` when set. */
+    sha256?: string;
+};
+
+/** Entry of `catalog/puzzle_databases.json`. */
+export type CatalogPuzzleDatabaseInfo = PuzzleDatabaseInfo & {
+    downloadLink: string;
+    /** Hex SHA-256 of the file at `downloadLink`; verified by `download_file` when set. */
+    sha256?: string;
+};
+
 export type Sides = "WhiteBlack" | "BlackWhite" | "Any";
 
 export interface CompleteGame {
@@ -125,7 +138,7 @@ export function useDefaultDatabases(opened: boolean) {
         if (!data.ok) {
             throw new Error("Failed to fetch engines");
         }
-        return (await data.json()) as SuccessDatabaseInfo[];
+        return (await data.json()) as CatalogDatabaseInfo[];
     });
     return {
         defaultDatabases: data,
@@ -134,18 +147,14 @@ export function useDefaultDatabases(opened: boolean) {
     };
 }
 
-export async function getDefaultPuzzleDatabases(): Promise<
-    (PuzzleDatabaseInfo & { downloadLink: string })[]
-> {
+export async function getDefaultPuzzleDatabases(): Promise<CatalogPuzzleDatabaseInfo[]> {
     const data = await fetch(`${CATALOG_BASE_URL}/puzzle_databases.json`, {
         method: "GET",
     });
     if (!data.ok) {
         throw new Error("Failed to fetch puzzle databases");
     }
-    return (await data.json()) as (PuzzleDatabaseInfo & {
-        downloadLink: string;
-    })[];
+    return (await data.json()) as CatalogPuzzleDatabaseInfo[];
 }
 
 export interface Opening {

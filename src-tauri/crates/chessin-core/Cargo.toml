@@ -1,0 +1,10 @@
+[package]
+name = "chessin-core"
+version = "0.1.0"
+description = "Chessin core: the Tauri-independent parts (store, jobs, cache, review, explain, srs, names, query)"
+license = "GPL-3.0-only"
+repository = "https://github.com/MikhailXiaomaikou/Chessin"
+edition = "2021"
+publish = false
+
+[dependencies]

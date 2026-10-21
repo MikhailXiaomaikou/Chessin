@@ -1,0 +1,14 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = """
+Default permissions for the Chessin plugin.
+
+#### Granted Permissions
+
+Every Chessin command is allowed; the plugin is only ever loaded by the Chessin
+main window (see `src-tauri/capabilities/main.json`).
+
+"""
+
+permissions = ["allow-chessin-ping"]

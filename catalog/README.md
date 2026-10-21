@@ -38,6 +38,7 @@ entry per `(engine, os, bmi2)` combination.
   "bmi2": true, // true = build needs BMI2/AVX2; false = portable build
   "path": "stockfish/stockfish-ubuntu-x86-64-bmi2", // executable path relative to the engines dir, after extraction ("/" separators)
   "downloadLink": "https://.../stockfish-ubuntu-x86-64-bmi2.tar", // .zip / .tar / .tar.gz are extracted into the engines dir; anything else is saved as-is
+  "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", // optional, hex SHA-256 of the file at downloadLink (the archive itself, not its contents); see Notes
   "downloadSize": 45000000, // bytes, shown in the UI
   "elo": 3640, // optional, shown in the UI
   "image": "https://.../stockfish.png", // optional logo URL
@@ -64,12 +65,14 @@ into the databases dir under `<title>.db3`.
   "event_count": 120,
   "storage_size": 850000000, // bytes
   "downloadLink": "https://.../lichess-elite-2024.db3",
+  "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", // optional, hex SHA-256 of the file at downloadLink; see Notes
   "filename": "lichess-elite-2024.db3", // informational
   "indexed": true, // whether the .db3 ships with position index tables
 }
 ```
 
-Type: `DatabaseInfo` from `src/bindings/generated.ts` plus `downloadLink`
+Type: `CatalogDatabaseInfo` from `src/utils/db.ts`, i.e. `DatabaseInfo` from
+`src/bindings/generated.ts` plus `downloadLink` and the optional `sha256`
 (`type` and `file` are added by the app, do not include them).
 
 ## `puzzle_databases.json`
@@ -87,8 +90,11 @@ Consumed by `getDefaultPuzzleDatabases` in `src/utils/db.ts`
   "storageSize": 600000000, // bytes
   "path": "lichess-puzzles.db3", // informational
   "downloadLink": "https://.../lichess-puzzles.db3",
+  "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", // optional, hex SHA-256 of the file at downloadLink; see Notes
 }
 ```
+
+Type: `CatalogPuzzleDatabaseInfo` from `src/utils/db.ts`.
 
 ## Notes
 
@@ -98,5 +104,18 @@ Consumed by `getDefaultPuzzleDatabases` in `src/utils/db.ts`
   catalog JSON itself **is** fetched through the `http` plugin, so the host
   of `CATALOG_BASE_URL` must be allowed in
   `src-tauri/capabilities/main.json` (`http:default` scope).
+- `sha256` (all three files) is optional but recommended for anything not
+  served from a host you control. It is the hex SHA-256 (either case) of
+  the exact bytes at `downloadLink` (`sha256sum <file>`; for an archive,
+  hash the archive, not the extracted binary). When set, `download_file`
+  hashes the complete download before extracting or moving it into place and
+  deletes it with an error on mismatch, so a bad or tampered file never
+  reaches the engines/databases/puzzles dir. Remember to update it whenever
+  `downloadLink` starts pointing at different bytes.
+- Downloads are streamed to `<target>.part` (for archives,
+  `<dir>/<archive name>.part`) and moved into place only once complete. An
+  interrupted download is resumed on the next click with an HTTP `Range`
+  request, so hosts that honour `Range` (GitHub Releases does) save users
+  from restarting large files; hosts that answer `200` simply restart.
 - Keep the files valid JSON (no comments) and keep them small; they are
   fetched on every open of the respective dialog.
