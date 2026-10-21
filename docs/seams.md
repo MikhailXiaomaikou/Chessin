@@ -1,6 +1,6 @@
 # 挂载点台账（Seams Ledger）
 
-> 更新：2026-10-21（S0 第一批）　|　依据：[构建方案](chessin-on-en-croissant-plan.md) §2.2「挂载点台账」、§2.3「文件三分法」、附录 A。
+> 更新：2026-10-21（S0 第一、二批）　|　依据：[构建方案](chessin-on-en-croissant-plan.md) §2.2「挂载点台账」、§2.3「文件三分法」、附录 A。
 
 这份台账记录 Chessin 对 **En Croissant 上游文件** 的每一处改动。原则（方案 §2）：软分叉加覆盖层，上游文件只做"挂载点"级改动，每处改动写明原因；目标是 S2 结束时覆盖层（`src/chessin/`、`crates/`、配置覆盖文件、`chessin` 翻译命名空间）之外的改动少于 600 行。
 
@@ -44,20 +44,29 @@
 | `catalog/*`                         | 引擎、棋谱库、谜题目录（先托管在 GitHub 仓库目录和 Releases）                                                                  | 拍板第 4 项                                   | S0 已改 |
 | `docs/seams.md`                     | 本台账                                                                                                                         | 方案 §2.2                                     | S0 已改 |
 
-## 2. S0 范围内、本批刻意未做（待做，需运行验证）
+### 1.3 S0 第二批（已改，2026-10-21 晚）
 
-| 文件                                                                | 改动                                                                                                                                                                       | 原因                                                                                                 | 状态               |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------ |
-| `src-tauri/tauri.chessin.conf.json`（`app.security.csp`）           | 在覆盖层设置严格 CSP（上游为 `null`）                                                                                                                                      | 安全。要在真机验证 `asset:`、`ipc:`、引擎与目录下载、Lichess/Chess.com 请求都不被误伤                | 待做（需运行验证） |
-| `src-tauri/capabilities/main.json`                                  | 收窄 `fs`、`assetProtocol`、`opener` 的范围                                                                                                                                | 安全。要跑完打开 PGN、导入、引擎安装、外链打开等路径                                                 | 待做（需运行验证） |
-| `src-tauri/src/db/mod.rs`                                           | 默认 `journal_mode=WAL`；批量导入用独立、不进连接池的连接（上游导入时关闭日志，崩溃会损坏库）                                                                              | 数据安全。要用大库实测导入性能和中断恢复；回馈上游（附录 B 第 2 项）                                 | 待做（需运行验证） |
-| `src-tauri/src/fs.rs`                                               | 下载流式写盘、HTTP Range 续传、sha256 校验                                                                                                                                 | 安全；国内网络。要配合 `catalog/*` 里的校验和字段联调                                                | 待做（需运行验证） |
-| `src-tauri/Cargo.toml`                                              | vendor `vampirc-uci`（现为 git 依赖，rev `0d2b70d`）；锁定 shakmaty 0.27.1（已是 `"0.27.1"`，待改为精确版本）                                                              | 构建可复现。要确认 vendor 后 `cargo test --locked` 仍过                                              | 待做（需运行验证） |
-| `public/pieces`（及 `public/board`、`sound/`）                      | 素材许可证审计，剔除 NC 素材，补第三方素材清单                                                                                                                             | 许可证。需逐套核对来源                                                                               | 待做（需运行验证） |
-| `src-tauri/tauri.chessin.conf.json`（`plugins.updater`）            | 生成 minisign 密钥对，填入 Chessin 公钥和端点，重新启用更新器                                                                                                              | 分叉阻断项：不换密钥会被"更新"成 En Croissant；私钥要进 CI secrets，先验证签名链                     | 待做（需运行验证） |
-| `package.json`、`pnpm-lock.yaml`                                    | 移除已无引用的 `posthog-js` 依赖                                                                                                                                           | 合规；瘦身。要跑 `pnpm install` 更新锁文件并过 CI                                                    | 待做（需运行验证） |
-| `src-tauri/Cargo.toml`、`src-tauri/src/main.rs`、`crates/chessin-*` | `src-tauri` 改为 Cargo workspace；`tauri-plugin-chessin` 空壳（tauri-specta 导出到 `src/chessin/bindings.ts`）；`main.rs` 只加一行 `.plugin(tauri_plugin_chessin::init())` | 挂载点骨架（方案 §2.2「Rust 新增」）。要确认 workspace 改造后 `tauri build` 和 rust-cache 路径仍正确 | 待做（需运行验证） |
-| `.github/workflows/test.yml`                                        | 10 条 Playwright 冒烟测试（打开 PGN、走子、开引擎、导入、谜题、浏览库）                                                                                                    | 回归网。需要可在 CI 跑的 Tauri 驱动方案                                                              | 待做（需运行验证） |
+| 文件 | 改动 | 原因 | 状态 |
+| --- | --- | --- | --- |
+| `src-tauri/src/db/mod.rs`、`src-tauri/src/db/migrate.rs`（新） | 所有连接 `journal_mode=WAL`、`synchronous=NORMAL`、`foreign_keys=ON`、`busy_timeout=30s`；不再有 `journal_mode=OFF`；批量导入用独立连接（事务内 `synchronous=OFF`，结束后 `NORMAL` 并 checkpoint）；`PRAGMA user_version` 迁移机制（v1 = 当前 schema；旧 EC 库原地盖章；更新版本的库拒绝打开）；删除库时顺带删 `-wal/-shm`；9 个新测试 | 数据安全（X-3）。回馈上游（附录 B 第 2 项） | S0 已改 |
+| `src-tauri/src/fs.rs` | 下载流式写到 `.part`，`Range` 续传，可选 `sha256` 校验后再解压或改名，原子改名；7 个单测 | 安全；国内网络 | S0 已改 |
+| `src/bindings/generated.ts`、`src/utils/engines.ts`、`src/utils/db.ts`、`AddEngine.tsx`、`AddDatabase.tsx`、`AddPuzzle.tsx`、`src/utils/lichess/api.tsx` | `downloadFile` 增加 `sha256` 参数；目录条目可带 `sha256` | 同上 | S0 已改 |
+| `src-tauri/Cargo.toml`、`Cargo.lock`、`src-tauri/src/main.rs`（一行）、`src-tauri/capabilities/main.json`（一项） | Cargo workspace；`crates/chessin-core`、`crates/tauri-plugin-chessin`（tauri-specta 导出到 `src/chessin/bindings.ts`，并有测试保证提交的 bindings 与生成结果一致）；`vampirc-uci` 从 git 依赖改为 `vendor/`；加 `sha2` | 方案 §2.2「Rust 新增」；构建可复现 | S0 已改 |
+| `package.json`、`pnpm-lock.yaml` | 移除 `posthog-js`、`rehype-raw` | 瘦身；合规 | S0 已改 |
+| `public/pieces`、`sound/`、`src/state/atoms.ts`、`PiecesSelect.tsx`、`SoundSelect.tsx` | 按 Lichess COPYING.md 移除 18 套 NC/无许可棋子和 `lisp` 音效；默认棋子 `cburnett`，旧配置回退；`docs/THIRD_PARTY_ASSETS.md` | 许可证 | S0 已改 |
+| `src-tauri/tauri.chessin.conf.json`、`src-tauri/README.chessin.md`、`.github/workflows/release.yml` | 更新器：Chessin 公钥 + GitHub Releases 端点；`csp`/`devCsp`；发布流程改用新密钥和覆盖配置 | 分叉阻断项；安全 | S0 已改（CSP 未实机验证，README 写了关闭方法） |
+| `src/translation/*.json`、`launch.ts`、`App.tsx`、`__root.tsx`、`annotation.ts`、`index.tsx` | zh-CN/zh-TW 补全；术语统一（开局体系/开局书/失准/新着/主线）；19 处硬编码英文改走 `t()`；dayjs 随语言；`src/chessin/i18n/terms.yaml`；i18n 测试 | X-7 | S0 已改 |
+| `.oxfmtrc.json`、`.oxlintrc.json` | 忽略生成文件 `src/chessin/bindings.ts` | 工具 | S0 已改 |
+
+## 2. 仍待做（需运行验证）
+
+| 文件 | 改动 | 原因 | 状态 |
+| --- | --- | --- | --- |
+| `src-tauri/capabilities/main.json` | 收窄 `fs`、`assetProtocol`、`opener` 的范围（HTTP 白名单已换成 GitHub 主机） | 安全。要跑完打开 PGN、导入、引擎安装、外链打开等路径 | 待做（需运行验证） |
+| `src-tauri/tauri.chessin.conf.json`（`csp`） | 已写入，**尚未在真机验证** | 见 README.chessin.md 的关闭方法 | 待验证 |
+| `.github/workflows/test.yml` | 冒烟测试（Linux/Windows 用 tauri-driver；macOS 人工）；`cargo fmt --check` 门禁（上游代码本身不是 rustfmt 干净的，先不加） | 回归网 | 待做 |
+| `src-tauri/src/chess.rs`、`src-tauri/src/db/search.rs` | 上游在 d64ce9e 就有 8 个失败的 Rust 测试（7 个评估测试、1 个检索测试），正在根因修复 | 否则 Rust CI 一开始就红 | 进行中 |
+| `sound/standard`、`sound/robot`、`sound/woodland`、`public/pieces-3d`、`public/board-3d`、`public/board/horsey.jpg` | 来源待确认（见 THIRD_PARTY_ASSETS.md） | 许可证 | 待确认 |
 
 ## 3. 方案列出的后续挂载点（计划中）
 
