@@ -12,7 +12,7 @@ export async function openCommandLineFile(
     setActiveTab: React.Dispatch<React.SetStateAction<string | null>>,
     navigateToBoard: () => Promise<unknown>,
 ) {
-    if (/^encroissant:/i.test(file)) return;
+    if (/^chessin:/i.test(file)) return;
     try {
         await openFile(file, setTabs, setActiveTab);
         await navigateToBoard();
@@ -35,12 +35,12 @@ export const handleDeepLink = async (
     let notificationShown = false;
     try {
         const url = new URL(urlStr);
-        if (url.protocol !== "encroissant:") return;
+        if (url.protocol !== "chessin:") return;
 
         if (url.host === "import") {
             const gameUrl = url.searchParams.get("url");
             if (!gameUrl) {
-                throw new Error("No URL parameter provided in encroissant://import");
+                throw new Error("No URL parameter provided in chessin://import");
             }
 
             notifications.show({

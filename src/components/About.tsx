@@ -39,8 +39,8 @@ function AboutModal({
 
       <br />
 
-      <Anchor href="https://www.encroissant.org" target="_blank" rel="noreferrer">
-        www.encroissant.org
+      <Anchor href="https://github.com/MikhailXiaomaikou/Chessin" target="_blank" rel="noreferrer">
+        github.com/MikhailXiaomaikou/Chessin
       </Anchor>
     </Modal>
   );

@@ -24,31 +24,47 @@ import zh_TW from "./translation/zh-TW.json";
 import { setAutoFreeze } from "immer";
 import LanguageDetector from "i18next-browser-languagedetector";
 
+const resources = {
+  "en-US": en_US,
+  "en-GB": en_GB,
+  "pt-PT": pt_PT,
+  "zh-CN": zh_CN,
+  "ru-RU": ru_RU,
+  "uk-UA": uk_UA,
+  "be-BY": be_BY,
+  "nb-NO": nb_NO,
+  "pl-PL": pl_PL,
+  "es-ES": es_ES,
+  "it-IT": it_IT,
+  "fr-FR": fr_FR,
+  "tr-TR": tr_TR,
+  "ko-KR": ko_KR,
+  "zh-TW": zh_TW,
+  "de-DE": de_DE,
+};
+
+// Chessin: the OS/browser may report Chinese as "zh", "zh-Hans", "zh-Hans-CN",
+// "zh-Hant-TW", "zh-HK", ... — collapse those onto the two locales we ship.
+// Other languages are resolved by i18next against `supportedLngs`
+// ("de" -> "de-DE", "pt-BR" -> "pt-PT", ...).
+const convertDetectedLanguage = (lng: string) => {
+  const lower = lng.toLowerCase();
+  if (!lower.startsWith("zh")) return lng;
+  const traditional = ["zh-hant", "zh-tw", "zh-hk", "zh-mo"];
+  return traditional.some((prefix) => lower.startsWith(prefix)) ? "zh-TW" : "zh-CN";
+};
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    resources: {
-      "en-US": en_US,
-      "en-GB": en_GB,
-      "pt-PT": pt_PT,
-      "zh-CN": zh_CN,
-      "ru-RU": ru_RU,
-      "uk-UA": uk_UA,
-      "be-BY": be_BY,
-      "nb-NO": nb_NO,
-      "pl-PL": pl_PL,
-      "es-ES": es_ES,
-      "it-IT": it_IT,
-      "fr-FR": fr_FR,
-      "tr-TR": tr_TR,
-      "ko-KR": ko_KR,
-      "zh-TW": zh_TW,
-      "de-DE": de_DE,
-    },
+    resources,
+    supportedLngs: Object.keys(resources),
     detection: {
-      order: ["localStorage"],
+      // Chessin: an explicit choice (localStorage) wins; otherwise follow the system language.
+      order: ["localStorage", "navigator"],
       caches: ["localStorage"],
+      convertDetectedLanguage,
     },
     fallbackLng: "en-US",
     returnEmptyString: false,

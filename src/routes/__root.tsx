@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import useSWRImmutable from "swr/immutable";
 import { match } from "ts-pattern";
 import type { Dirs } from "@/App";
+import { DOCS_URL } from "@/chessin/config";
 import AboutModal from "@/components/About";
 import { SideBar } from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
@@ -121,17 +122,23 @@ function RootLayout() {
   }, [navigate, setActiveTab, setTabs, t]);
 
   const checkForUpdates = useCallback(async () => {
-    const update = await check();
-    if (update) {
-      const yes = await ask("Do you want to install the new version now?", {
-        title: "New version available",
-      });
-      if (yes) {
-        await update.downloadAndInstall();
-        await relaunch();
+    try {
+      const update = await check();
+      if (update) {
+        const yes = await ask("Do you want to install the new version now?", {
+          title: "New version available",
+        });
+        if (yes) {
+          await update.downloadAndInstall();
+          await relaunch();
+        }
+      } else {
+        await message("No updates available");
       }
-    } else {
-      await message("No updates available");
+    } catch (e) {
+      // Chessin: the updater has no endpoints until a release channel exists
+      // (see src-tauri/README.chessin.md), so check() rejects instead of hanging.
+      await message(`Failed to check for updates: ${e}`);
     }
   }, []);
 
@@ -312,7 +319,7 @@ function RootLayout() {
           {
             label: t("Menu.Help.Documentation"),
             id: "documentation",
-            action: () => openUrl("https://encroissant.org/docs/"),
+            action: () => openUrl(DOCS_URL),
           },
           {
             label: t("Menu.Help.ClearSavedData"),

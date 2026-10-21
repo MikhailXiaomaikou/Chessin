@@ -182,7 +182,8 @@ export const eraseDrawablesOnClickAtom = atomWithStorage<boolean>(
     false,
 );
 export const autoPromoteAtom = atomWithStorage<boolean>("auto-promote", true);
-export const autoSaveAtom = atomWithStorage<boolean>("auto-save", true);
+// Chessin: default off — EC's autosave writes into external files; see docs/chessin-on-en-croissant-plan.md X-3
+export const autoSaveAtom = atomWithStorage<boolean>("auto-save", false);
 export const previewBoardOnHoverAtom = atomWithStorage<boolean>("preview-board-on-hover", true);
 export const flipBoardAfterMoveAtom = atomWithStorage<boolean>("flip-board-after-move", true);
 export const enableBoardScrollAtom = atomWithStorage<boolean>("board-scroll", true);
@@ -215,9 +216,6 @@ export const sessionsAtom = atomWithStorage<Session[]>("sessions", []);
 export const nativeBarAtom = atomWithStorage<boolean>("native-bar", false);
 export const showSidebarAtom = atomWithStorage<boolean>("show-sidebar", true);
 export const showTabBarAtom = atomWithStorage<boolean>("show-tabbar", true);
-export const telemetryEnabledAtom = atomWithStorage<boolean>("telemetry-enabled", true, undefined, {
-    getOnInit: true,
-});
 
 // Recent Files
 

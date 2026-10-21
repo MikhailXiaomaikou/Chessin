@@ -1,0 +1,97 @@
+# Chessin: weekly dry run of merging En Croissant's master into our branch
+# (plan §2.1). The goal is to surface merge conflicts and build breakage early,
+# before the monthly real merge. This workflow is read-only: it never commits
+# to a tracked branch and never pushes.
+name: Upstream merge rehearsal
+
+on:
+  schedule:
+    # Every Monday at 03:00 UTC.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM_URL: https://github.com/franciscoBSalgueiro/en-croissant.git
+  UPSTREAM_BRANCH: master
+
+jobs:
+  rehearse:
+    name: Merge upstream/master (dry run)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Full history: git needs the merge base with upstream.
+          fetch-depth: 0
+          # No token left in .git/config, so nothing in this job can push.
+          persist-credentials: false
+
+      - name: Configure throwaway git identity
+        run: |
+          git config user.name "chessin-ci"
+          git config user.email "ci@chessin.invalid"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch --no-tags upstream "$UPSTREAM_BRANCH"
+          base="$(git merge-base HEAD "upstream/$UPSTREAM_BRANCH")"
+          ahead="$(git rev-list --count "HEAD..upstream/$UPSTREAM_BRANCH")"
+          echo "HEAD:            $(git rev-parse --short HEAD) ($GITHUB_REF_NAME)"
+          echo "upstream/$UPSTREAM_BRANCH: $(git rev-parse --short "upstream/$UPSTREAM_BRANCH")"
+          echo "merge base:      $(git rev-parse --short "$base")"
+          echo "upstream commits not yet merged: $ahead"
+          {
+            echo "## Upstream merge rehearsal"
+            echo
+            echo "- HEAD: \`$(git rev-parse --short HEAD)\` (\`$GITHUB_REF_NAME\`)"
+            echo "- upstream/$UPSTREAM_BRANCH: \`$(git rev-parse --short "upstream/$UPSTREAM_BRANCH")\`"
+            echo "- merge base: \`$(git rev-parse --short "$base")\`"
+            echo "- upstream commits not yet merged: $ahead"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attempt merge on a throwaway branch (no commit, no push)
+        run: |
+          git checkout -b ci/upstream-merge-rehearsal
+          if git merge --no-commit --no-ff "upstream/$UPSTREAM_BRANCH"; then
+            echo "upstream/$UPSTREAM_BRANCH merges cleanly."
+            echo "- result: merges cleanly" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Merging upstream/$UPSTREAM_BRANCH into $GITHUB_REF_NAME conflicts."
+            echo "Conflicting files:"
+            git diff --name-only --diff-filter=U | sed 's/^/  - /'
+            {
+              echo "- result: **CONFLICTS**"
+              echo
+              echo "Conflicting files:"
+              echo
+              git diff --name-only --diff-filter=U | sed 's/^/- `/; s/$/`/'
+            } >> "$GITHUB_STEP_SUMMARY"
+            git diff --name-only --diff-filter=U | while read -r f; do
+              echo "::error file=$f::merge conflict with upstream/$UPSTREAM_BRANCH"
+            done
+            exit 1
+          fi
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Sync node version and setup cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      # --frozen-lockfile also fails when pnpm-lock.yaml merged textually but
+      # no longer matches the merged package.json; that is a real finding too.
+      - name: Install app dependencies (merged tree)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint merged tree
+        run: pnpm lint

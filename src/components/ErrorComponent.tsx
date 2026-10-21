@@ -1,6 +1,7 @@
 import { Anchor, Button, Code, CopyButton, Group, Stack, Text, Title } from "@mantine/core";
 import { useNavigate } from "@tanstack/react-router";
 import { Trans, useTranslation } from "react-i18next";
+import { ISSUES_URL } from "@/chessin/config";
 
 export default function ErrorComponent({ error }: { error: unknown }) {
   const { t } = useTranslation();
@@ -41,12 +42,7 @@ export default function ErrorComponent({ error }: { error: unknown }) {
         <Trans
           i18nKey="Error.ReportIssue"
           components={{
-            github: (
-              <Anchor
-                href="https://github.com/franciscoBSalgueiro/en-croissant/issues/new?assignees=&labels=bug&projects=&template=bug.yml"
-                target="_blank"
-              />
-            ),
+            github: <Anchor href={ISSUES_URL} target="_blank" />,
             discord: <Anchor href="https://discord.com/invite/tdYzfDbSSW" target="_blank" />,
           }}
         />

@@ -1,0 +1,27 @@
+{
+  "productName": "Chessin",
+  "identifier": "cn.chessin.app",
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "chessin"
+        ]
+      }
+    },
+    "updater": {
+      "active": false,
+      "pubkey": "",
+      "endpoints": []
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Chessin",
+        "visible": false,
+        "decorations": true
+      }
+    ]
+  }
+}

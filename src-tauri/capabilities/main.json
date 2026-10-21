@@ -43,7 +43,9 @@
         {
             "identifier": "http:default",
             "allow": [
-                "https://www.encroissant.org/**",
+                "https://raw.githubusercontent.com/**",
+                "https://github.com/**",
+                "https://objects.githubusercontent.com/**",
                 "https://api.chess.com/**",
                 "https://www.chess.com/**",
                 "https://lichess.org/**",

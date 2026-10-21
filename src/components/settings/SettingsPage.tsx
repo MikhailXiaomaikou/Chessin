@@ -5,7 +5,6 @@ import {
   ScrollArea,
   Select,
   Stack,
-  Switch,
   Table,
   Tabs,
   Text,
@@ -23,14 +22,12 @@ import {
   IconMouse,
   IconReload,
   IconSearch,
-  IconShield,
   IconVolume,
 } from "@tabler/icons-react";
 import { useLoaderData } from "@tanstack/react-router";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom } from "jotai";
 import { RESET } from "jotai/utils";
-import posthog from "posthog-js";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -59,7 +56,6 @@ import {
   storedDocumentDirAtom,
   storedEnginesDirAtom,
   storedPuzzlesDirAtom,
-  telemetryEnabledAtom,
 } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
 import FileInput from "../common/FileInput";
@@ -84,8 +80,7 @@ type SettingCategory =
   | "sound"
   | "keybinds"
   | "directories"
-  | "repertoire"
-  | "privacy";
+  | "repertoire";
 
 interface SettingItem {
   id: string;
@@ -123,31 +118,6 @@ function SettingRow({
       </div>
       {children}
     </Group>
-  );
-}
-
-function TelemetrySwitch() {
-  const { t } = useTranslation();
-  const [enabled, setEnabled] = useAtom(telemetryEnabledAtom);
-  return (
-    <Switch
-      onLabel={t("Common.On")}
-      offLabel={t("Common.Off")}
-      size="lg"
-      checked={enabled}
-      onChange={(event) => {
-        const newValue = event.currentTarget.checked;
-        setEnabled(newValue);
-        if (newValue) {
-          posthog.opt_in_capturing();
-        } else {
-          posthog.opt_out_capturing();
-        }
-      }}
-      styles={{
-        track: { cursor: "pointer" },
-      }}
-    />
   );
 }
 
@@ -624,15 +594,6 @@ export default function Page() {
           />
         ),
       },
-      // Privacy settings
-      {
-        id: "telemetry",
-        category: "privacy",
-        title: t("Settings.Privacy.Telemetry"),
-        description: t("Settings.Privacy.Telemetry.Desc"),
-        keywords: ["telemetry", "privacy", "analytics", "tracking"],
-        render: () => <TelemetrySwitch />,
-      },
     ],
     [
       t,
@@ -706,11 +667,6 @@ export default function Page() {
         title: t("Settings.Repertoire"),
         description: t("Settings.Repertoire.Desc"),
         icon: <IconBook size="1rem" />,
-      },
-      privacy: {
-        title: t("Settings.Privacy"),
-        description: t("Settings.Privacy.Desc"),
-        icon: <IconShield size="1rem" />,
       },
     }),
     [t],
@@ -849,9 +805,6 @@ export default function Page() {
             <Tabs.Tab value="repertoire" leftSection={<IconBook size="1rem" />}>
               {t("Settings.Repertoire")}
             </Tabs.Tab>
-            <Tabs.Tab value="privacy" leftSection={<IconShield size="1rem" />}>
-              {t("Settings.Privacy")}
-            </Tabs.Tab>
           </Tabs.List>
           <Stack flex={1} px="md">
             <ScrollArea>
@@ -960,16 +913,6 @@ export default function Page() {
                     {t("Settings.Repertoire.Desc")}
                   </Text>
                   {renderCategorySettings("repertoire")}
-                </Tabs.Panel>
-
-                <Tabs.Panel value="privacy">
-                  <Text size="lg" fw={500} className={classes.title}>
-                    {t("Settings.Privacy")}
-                  </Text>
-                  <Text size="xs" c="dimmed" mt={3} mb="lg">
-                    {t("Settings.Privacy.Desc")}
-                  </Text>
-                  {renderCategorySettings("privacy")}
                 </Tabs.Panel>
               </Card>
             </ScrollArea>

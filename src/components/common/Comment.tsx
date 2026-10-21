@@ -2,11 +2,14 @@ import { Typography } from "@mantine/core";
 import { memo } from "react";
 
 import Markdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 
+// Chessin: raw HTML is no longer rendered (rehype-raw removed, see docs/seams.md),
+// so the Tiptap `++underline++` markers are stripped instead of being turned into
+// `<u>` tags. Underline styling comes back once rehype-sanitize (with `u` allowed)
+// is added.
 function normalizeTiptapMarkdown(comment: string) {
-  return comment.replace(/\+\+([\s\S]+?)\+\+/g, "<u>$1</u>");
+  return comment.replace(/\+\+([\s\S]+?)\+\+/g, "$1");
 }
 
 function Comment({ comment }: { comment: string }) {
@@ -26,7 +29,7 @@ function Comment({ comment }: { comment: string }) {
           a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
           p: ({ node: _node, ...props }) => (multipleLine ? <p {...props} /> : <span {...props} />),
         }}
-        rehypePlugins={[rehypeRaw, remarkGfm]}
+        rehypePlugins={[remarkGfm]}
       >
         {normalizedComment}
       </Markdown>

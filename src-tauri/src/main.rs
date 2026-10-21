@@ -116,7 +116,7 @@ pub fn file_from_args(args: &[String], cwd: &str) -> Option<String> {
     } else {
         first
     };
-    if args.next().is_some() || file.to_ascii_lowercase().starts_with("encroissant:") {
+    if args.next().is_some() || file.to_ascii_lowercase().starts_with("chessin:") {
         return None;
     }
     Some(std::path::Path::new(cwd).join(file).to_string_lossy().into_owned())

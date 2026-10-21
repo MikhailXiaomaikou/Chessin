@@ -15,7 +15,6 @@ import { listen } from "@tauri-apps/api/event";
 import { attachConsole, error, info, warn } from "@tauri-apps/plugin-log";
 import { getDefaultStore, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { ContextMenuProvider } from "mantine-contextmenu";
-import posthog from "posthog-js";
 import { useEffect, useRef } from "react";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 
@@ -35,7 +34,6 @@ import {
   storedEnginesDirAtom,
   storedPuzzlesDirAtom,
   tabsAtom,
-  telemetryEnabledAtom,
 } from "./state/atoms";
 
 import "@/styles/chessgroundBaseOverride.css";
@@ -59,7 +57,6 @@ const colorSchemeManager = localStorageColorSchemeManager({
   key: "mantine-color-scheme",
 });
 
-import { getVersion } from "@tauri-apps/api/app";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
@@ -167,19 +164,7 @@ function useAppStartup() {
       checkForUpdates();
 
       const store = getDefaultStore();
-      const telemetryEnabled = store.get(telemetryEnabledAtom);
 
-      posthog.init("phc_kgEBtifs0EgWlrl4ROYEbnsQ1b7BS2W5BKLNyXe7f8z", {
-        api_host: "https://app.posthog.com",
-        autocapture: false,
-        capture_pageview: false,
-        capture_pageleave: false,
-        disable_session_recording: true,
-      });
-
-      if (telemetryEnabled) {
-        posthog.capture("app_started", { version: await getVersion() });
-      }
       const unlistenFile = await listen<string>("open-cli-file", ({ payload }) => {
         void openCommandLineFile(payload, setTabs, setActiveTab, navigateToBoard);
       });
