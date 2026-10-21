@@ -1,4 +1,5 @@
 mod encoding;
+mod migrate;
 mod models;
 mod ops;
 mod schema;
@@ -20,11 +21,11 @@ use chrono::{NaiveDate, NaiveTime};
 use dashmap::DashMap;
 use diesel::{
     connection::{DefaultLoadingMode, SimpleConnection},
-    insert_into,
     prelude::*,
     r2d2::{ConnectionManager, Pool},
+    result::{ConnectionError, DatabaseErrorKind},
     sql_query,
-    sql_types::Text,
+    sql_types::{Integer, Text},
 };
 use pgn_reader::{BufferedReader, Nag, RawHeader, SanPlus, Skip, Visitor};
 use rayon::prelude::*;
@@ -46,7 +47,7 @@ use std::{
 };
 use tauri::{Emitter, State};
 
-use log::info;
+use log::{info, warn};
 use tauri_specta::Event as _;
 
 use self::encoding::{
@@ -101,47 +102,71 @@ fn get_pawn_home(board: &Board) -> u16 {
     (second_rank_pawns as u16) | ((seventh_rank_pawns as u16) << 8)
 }
 
-#[derive(Debug)]
-pub enum JournalMode {
-    Delete,
-    Off,
-}
+type DbPool = Pool<ConnectionManager<SqliteConnection>>;
+type PooledDb = diesel::r2d2::PooledConnection<ConnectionManager<SqliteConnection>>;
 
-#[derive(Debug)]
-pub struct ConnectionOptions {
-    pub journal_mode: JournalMode,
-    pub enable_foreign_keys: bool,
-    pub busy_timeout: Option<Duration>,
-}
+/// How long a connection waits for a lock held by another connection or
+/// process before giving up with "database is locked".
+const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
-impl Default for ConnectionOptions {
-    fn default() -> Self {
-        Self {
-            journal_mode: JournalMode::Delete,
-            enable_foreign_keys: true,
-            busy_timeout: Some(Duration::from_secs(30)),
-        }
-    }
-}
+/// Settings for every connection handed out by the shared per-database pool.
+///
+/// There are deliberately no per-call fields. The pool is cached per path, so
+/// it would otherwise keep whatever the first caller asked for: upstream
+/// opened the pool with journaling off for import, and every later edit on
+/// that database ran unjournaled, so a crash could corrupt it. Every pooled
+/// connection now runs with WAL journaling, `synchronous = NORMAL`, foreign
+/// keys on and a busy timeout. Bulk import never uses the pool; see
+/// [`open_bulk_import_connection`].
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ConnectionOptions {}
 
 impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
     for ConnectionOptions
 {
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
-        (|| {
-            match self.journal_mode {
-                JournalMode::Delete => conn.batch_execute("PRAGMA journal_mode = DELETE;")?,
-                JournalMode::Off => conn.batch_execute("PRAGMA journal_mode = OFF;")?,
-            }
-            if self.enable_foreign_keys {
-                conn.batch_execute("PRAGMA foreign_keys = ON;")?;
-            }
-            if let Some(d) = self.busy_timeout {
-                conn.batch_execute(&format!("PRAGMA busy_timeout = {};", d.as_millis()))?;
-            }
+        configure_pooled_connection(conn).map_err(diesel::r2d2::Error::QueryError)
+    }
+}
+
+fn configure_pooled_connection(conn: &mut SqliteConnection) -> QueryResult<()> {
+    // The busy timeout goes first: switching to WAL may have to wait for a
+    // sibling connection that is doing the same.
+    conn.batch_execute(&format!(
+        "PRAGMA busy_timeout = {};",
+        BUSY_TIMEOUT.as_millis()
+    ))?;
+    enable_wal(conn)?;
+    conn.batch_execute("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;")?;
+    Ok(())
+}
+
+#[derive(QueryableByName)]
+struct JournalModeRow {
+    #[diesel(sql_type = Text)]
+    journal_mode: String,
+}
+
+/// Switches the database file to write-ahead logging. WAL is persistent, so
+/// this is a no-op after the first connection. Where WAL is impossible (a
+/// read-only file, a filesystem without shared memory) the connection stays
+/// usable with the file's existing journal mode and a warning is logged;
+/// `journal_mode = OFF` is never used.
+fn enable_wal(conn: &mut SqliteConnection) -> QueryResult<()> {
+    match sql_query("PRAGMA journal_mode = WAL;").get_result::<JournalModeRow>(conn) {
+        Ok(row) if row.journal_mode.eq_ignore_ascii_case("wal") => Ok(()),
+        Ok(row) => {
+            warn!(
+                "could not enable WAL journaling, database stays in {} mode",
+                row.journal_mode
+            );
             Ok(())
-        })()
-        .map_err(diesel::r2d2::Error::QueryError)
+        }
+        Err(e) if migrate::is_readonly_error(&e) => {
+            warn!("database is read-only, journaling left unchanged");
+            Ok(())
+        }
+        Err(e) => Err(e),
     }
 }
 
@@ -149,25 +174,93 @@ fn get_db_or_create(
     state: &State<AppState>,
     db_path: &str,
     options: ConnectionOptions,
-) -> Result<
-    diesel::r2d2::PooledConnection<diesel::r2d2::ConnectionManager<diesel::SqliteConnection>>,
-    Error,
-> {
-    let pool = match state.connection_pool.get(db_path) {
-        Some(pool) => pool.clone(),
-        None => {
-            let pool = Pool::builder()
-                .max_size(16)
-                .connection_customizer(Box::new(options))
-                .build(ConnectionManager::<SqliteConnection>::new(db_path))?;
-            state
-                .connection_pool
-                .insert(db_path.to_string(), pool.clone());
-            pool
-        }
-    };
+) -> Result<PooledDb, Error> {
+    open_pooled(&state.connection_pool, db_path, options)
+}
 
+/// Returns a connection from the pool for `db_path`, creating the pool (and
+/// migrating or creating the schema) on first use.
+fn open_pooled(
+    pools: &DashMap<String, DbPool>,
+    db_path: &str,
+    options: ConnectionOptions,
+) -> Result<PooledDb, Error> {
+    // Clone the pool out of the map so no shard lock is held while waiting
+    // for a free connection.
+    let existing = pools.get(db_path).map(|pool| pool.clone());
+    if let Some(pool) = existing {
+        return Ok(pool.get()?);
+    }
+
+    let pool = Pool::builder()
+        .max_size(16)
+        .connection_customizer(Box::new(options))
+        .build(ConnectionManager::<SqliteConnection>::new(db_path))?;
+
+    // Bring the schema up to date before the pool becomes visible to anyone.
+    {
+        let mut conn = pool.get()?;
+        let outcome = migrate::migrate(&mut conn)?;
+        info!("opened {db_path}: schema {outcome:?}");
+    }
+
+    // If another thread built a pool for the same path in the meantime, keep
+    // theirs: its connections are already handed out.
+    let pool = pools
+        .entry(db_path.to_string())
+        .or_insert(pool)
+        .value()
+        .clone();
     Ok(pool.get()?)
+}
+
+fn connection_error(e: ConnectionError) -> Error {
+    // `Error` has no variant for diesel's connection errors; keep the message.
+    Error::Diesel(Box::new(diesel::result::Error::DatabaseError(
+        DatabaseErrorKind::Unknown,
+        Box::new(e.to_string()),
+    )))
+}
+
+/// Opens a connection for bulk writes that bypasses the shared pool, so the
+/// relaxed settings used during import can never leak into ordinary edits.
+/// It starts with the same durability as a pooled connection; call
+/// [`begin_bulk_import`] and [`finish_bulk_import`] around the import itself.
+/// Foreign keys stay off, as upstream had them for import: `insert_to_db`
+/// creates every referenced row before the game.
+fn open_bulk_import_connection(db_path: &str) -> Result<SqliteConnection, Error> {
+    let mut conn = SqliteConnection::establish(db_path).map_err(connection_error)?;
+    conn.batch_execute(&format!(
+        "PRAGMA busy_timeout = {};",
+        BUSY_TIMEOUT.as_millis()
+    ))?;
+    enable_wal(&mut conn)?;
+    conn.batch_execute("PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = OFF;")?;
+    Ok(conn)
+}
+
+/// Turns off fsync for the duration of a bulk import. In WAL mode this keeps
+/// the database consistent across an application crash; only a power loss or
+/// OS crash can lose the import, which is simply re-run.
+fn begin_bulk_import(conn: &mut SqliteConnection) -> QueryResult<()> {
+    conn.batch_execute("PRAGMA synchronous = OFF;")
+}
+
+#[derive(QueryableByName)]
+struct WalCheckpointRow {
+    #[diesel(sql_type = Integer)]
+    busy: i32,
+}
+
+/// Restores normal durability and folds the WAL back into the main file so
+/// the import is on disk and the `-wal` file is truncated.
+fn finish_bulk_import(conn: &mut SqliteConnection) -> QueryResult<()> {
+    conn.batch_execute("PRAGMA synchronous = NORMAL;")?;
+    let row: WalCheckpointRow = sql_query("PRAGMA wal_checkpoint(TRUNCATE);").get_result(conn)?;
+    if row.busy != 0 {
+        warn!("WAL checkpoint after import could not complete: another connection is busy");
+    }
+    Ok(())
 }
 
 fn update_info_count(
@@ -506,7 +599,6 @@ pub async fn convert_pgn(
     app: tauri::AppHandle,
     title: String,
     description: Option<String>,
-    state: tauri::State<'_, AppState>,
 ) -> Result<(), Error> {
     if files.is_empty() {
         return Ok(());
@@ -514,77 +606,60 @@ pub async fn convert_pgn(
 
     let description = description.unwrap_or_default();
 
-    let db_exists = db_path.exists();
+    // Bulk import gets its own connection: the pool would cache whatever
+    // settings it was opened with for every later edit on this database.
+    let mut db = open_bulk_import_connection(db_path.to_str().unwrap())?;
 
-    // create the database file
-    let db = &mut get_db_or_create(
-        &state,
-        db_path.to_str().unwrap(),
-        ConnectionOptions {
-            enable_foreign_keys: false,
-            busy_timeout: None,
-            journal_mode: JournalMode::Off,
-        },
-    )?;
-
-    if !db_exists {
-        db.batch_execute(CREATE_TABLES_SQL)?;
-        set_info_value(db, "Version", DATABASE_VERSION)?;
-        set_info_value(db, "Title", &title)?;
-        set_info_value(db, "Description", &description)?;
+    // Creates the schema for a new file, stamps or upgrades an existing one.
+    // This runs with normal durability so the schema is on disk before the
+    // unsynced import starts.
+    let outcome = migrate::migrate(&mut db)?;
+    let is_new = outcome == migrate::MigrationOutcome::Created;
+    if is_new {
+        set_info_value(&mut db, "Version", DATABASE_VERSION)?;
+        set_info_value(&mut db, "Title", &title)?;
+        set_info_value(&mut db, "Description", &description)?;
     }
 
     // start counting time
     let start = Instant::now();
 
-    let mut imported_games = 0usize;
+    let imported = bulk_import(
+        &mut db,
+        &files,
+        timestamp.map(i64::from),
+        is_new,
+        |count, current_file_name| {
+            let elapsed = start.elapsed().as_millis() as u32;
+            app.emit("convert_progress", (count, elapsed, current_file_name))
+                .unwrap();
+        },
+    );
+    // Restore durability even when the import failed part-way.
+    let finished = finish_bulk_import(&mut db);
+    imported?;
+    finished?;
 
-    for file_path in files {
-        let current_file_name = file_path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned());
-        let extension = file_path.extension();
-        let file = File::open(&file_path)?;
+    Ok(())
+}
 
-        let uncompressed: Box<dyn std::io::Read + Send> = if extension == Some("bz2".as_ref()) {
-            Box::new(bzip2::read::MultiBzDecoder::new(file))
-        } else if extension == Some("zst".as_ref()) {
-            Box::new(zstd::Decoder::new(file)?)
-        } else {
-            Box::new(file)
-        };
+/// Runs the unsynced part of an import on a connection from
+/// [`open_bulk_import_connection`]: inserts every game in `files`, builds the
+/// indexes when `create_indexes` is set (a fresh database imports faster
+/// without them) and refreshes the counts in the `Info` table. The caller
+/// must follow up with [`finish_bulk_import`].
+fn bulk_import(
+    db: &mut SqliteConnection,
+    files: &[PathBuf],
+    timestamp: Option<i64>,
+    create_indexes: bool,
+    on_progress: impl FnMut(usize, Option<&str>),
+) -> Result<(), Error> {
+    begin_bulk_import(db)?;
 
-        let mut importer = Importer::new(timestamp.map(|t| t as i64));
-        let mut file_imported_games = 0usize;
+    import_pgn_files(db, files, timestamp, on_progress)?;
 
-        db.transaction::<_, diesel::result::Error, _>(|db| {
-            for game in BufferedReader::new(uncompressed)
-                .into_iter(&mut importer)
-                .flatten()
-                .flatten()
-            {
-                if (imported_games + file_imported_games).is_multiple_of(1000) {
-                    let elapsed = start.elapsed().as_millis() as u32;
-                    app.emit(
-                        "convert_progress",
-                        (
-                            imported_games + file_imported_games,
-                            elapsed,
-                            current_file_name.clone(),
-                        ),
-                    )
-                    .unwrap();
-                }
-                game.insert_to_db(db)?;
-                file_imported_games += 1;
-            }
-            Ok(())
-        })?;
-
-        imported_games += file_imported_games;
-    }
-
-    if !db_exists {
+    if create_indexes {
         // Create all the necessary indexes
         db.batch_execute(INDEXES_SQL)?;
     }
@@ -595,23 +670,67 @@ pub async fn convert_pgn(
     let event_count: i64 = events::table.count().get_result(db)?;
     let site_count: i64 = sites::table.count().get_result(db)?;
 
-    let counts = [
-        ("GameCount", game_count),
-        ("PlayerCount", player_count),
-        ("EventCount", event_count),
-        ("SiteCount", site_count),
-    ];
-
-    for c in counts.iter() {
-        insert_into(info::table)
-            .values((info::name.eq(c.0), info::value.eq(c.1.to_string())))
-            .on_conflict(info::name)
-            .do_update()
-            .set(info::value.eq(c.1.to_string()))
-            .execute(db)?;
-    }
+    update_info_count(db, "GameCount", game_count)?;
+    update_info_count(db, "PlayerCount", player_count)?;
+    update_info_count(db, "EventCount", event_count)?;
+    update_info_count(db, "SiteCount", site_count)?;
 
     Ok(())
+}
+
+/// Parses every PGN (optionally bz2 or zstd compressed) file in `files` and
+/// inserts its games, one transaction per file: a failure leaves earlier
+/// files committed and the failing file untouched. `on_progress` is called
+/// every 1000 games with the running total and the current file name.
+/// Returns the number of games inserted.
+fn import_pgn_files(
+    db: &mut SqliteConnection,
+    files: &[PathBuf],
+    timestamp: Option<i64>,
+    mut on_progress: impl FnMut(usize, Option<&str>),
+) -> Result<usize, Error> {
+    let mut imported_games = 0usize;
+
+    for file_path in files {
+        let current_file_name = file_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned());
+        let extension = file_path.extension();
+        let file = File::open(file_path)?;
+
+        let uncompressed: Box<dyn std::io::Read + Send> = if extension == Some("bz2".as_ref()) {
+            Box::new(bzip2::read::MultiBzDecoder::new(file))
+        } else if extension == Some("zst".as_ref()) {
+            Box::new(zstd::Decoder::new(file)?)
+        } else {
+            Box::new(file)
+        };
+
+        let mut importer = Importer::new(timestamp);
+        let mut file_imported_games = 0usize;
+
+        db.transaction::<_, diesel::result::Error, _>(|db| {
+            for game in BufferedReader::new(uncompressed)
+                .into_iter(&mut importer)
+                .flatten()
+                .flatten()
+            {
+                if (imported_games + file_imported_games).is_multiple_of(1000) {
+                    on_progress(
+                        imported_games + file_imported_games,
+                        current_file_name.as_deref(),
+                    );
+                }
+                game.insert_to_db(db)?;
+                file_imported_games += 1;
+            }
+            Ok(())
+        })?;
+
+        imported_games += file_imported_games;
+    }
+
+    Ok(imported_games)
 }
 
 pub fn generate_search_index(
@@ -1540,6 +1659,12 @@ pub async fn delete_database(
 
     // delete file
     remove_file(path_str)?;
+    // A stale WAL next to a new database of the same name would be replayed
+    // into it, so remove the WAL side files too (absent when SQLite already
+    // cleaned up on close).
+    for suffix in ["-wal", "-shm"] {
+        let _ = remove_file(format!("{path_str}{suffix}"));
+    }
     remove_file(get_index_path(&PathBuf::from(path_str)))?;
     Ok(())
 }
@@ -2201,5 +2326,226 @@ mod tests {
         assert_eq!(event_count, 1, "Only Unknown should remain");
         let site_count: i64 = sites::table.count().get_result(db).unwrap();
         assert_eq!(site_count, 1, "Only Unknown should remain");
+    }
+
+    // ---- durability: pool pragmas, user_version migrations, bulk import ----
+
+    #[derive(QueryableByName)]
+    struct PragmaInt {
+        #[diesel(sql_type = Integer)]
+        value: i32,
+    }
+
+    /// Reads a single-column pragma through its table-valued form, so the
+    /// pragma's own column name (`timeout` for `busy_timeout`) does not matter.
+    fn pragma_int(conn: &mut SqliteConnection, name: &str) -> i32 {
+        sql_query(format!("SELECT (SELECT * FROM pragma_{name}) AS value;"))
+            .get_result::<PragmaInt>(conn)
+            .unwrap()
+            .value
+    }
+
+    fn journal_mode(conn: &mut SqliteConnection) -> String {
+        sql_query("PRAGMA journal_mode;")
+            .get_result::<JournalModeRow>(conn)
+            .unwrap()
+            .journal_mode
+    }
+
+    fn info_value(conn: &mut SqliteConnection, name: &str) -> Option<String> {
+        info::table
+            .filter(info::name.eq(name))
+            .select(info::value)
+            .first::<Option<String>>(conn)
+            .unwrap()
+    }
+
+    fn temp_db_path(dir: &tempfile::TempDir, name: &str) -> String {
+        dir.path().join(name).to_str().unwrap().to_owned()
+    }
+
+    #[test]
+    fn new_pooled_database_is_wal_and_at_current_schema_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_db_path(&dir, "new.db3");
+        let pools = DashMap::new();
+
+        let mut conn = open_pooled(&pools, &path, ConnectionOptions::default()).unwrap();
+
+        assert_eq!(journal_mode(&mut conn), "wal");
+        assert_eq!(pragma_int(&mut conn, "synchronous"), 1, "NORMAL");
+        assert_eq!(pragma_int(&mut conn, "foreign_keys"), 1);
+        assert_eq!(pragma_int(&mut conn, "busy_timeout"), 30_000);
+        assert_eq!(
+            migrate::read_user_version(&mut conn).unwrap(),
+            migrate::CURRENT_VERSION as i32
+        );
+
+        // The schema was created, sentinel rows included.
+        let unknown: Player = players::table.find(0).first(&mut conn).unwrap();
+        assert_eq!(unknown.name.as_deref(), Some("Unknown"));
+
+        // The pool is cached and reused for the same path.
+        assert_eq!(pools.len(), 1);
+        drop(conn);
+        let mut again = open_pooled(&pools, &path, ConnectionOptions::default()).unwrap();
+        assert_eq!(journal_mode(&mut again), "wal");
+        assert_eq!(pools.len(), 1);
+    }
+
+    #[test]
+    fn existing_en_croissant_database_is_stamped_and_keeps_rows() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_db_path(&dir, "legacy.db3");
+
+        // An En Croissant file: rollback journal, no user_version stamp.
+        let magnus_id = {
+            let mut conn = SqliteConnection::establish(&path).unwrap();
+            conn.batch_execute(CREATE_TABLES_SQL).unwrap();
+            set_info_value(&mut conn, "Version", DATABASE_VERSION).unwrap();
+            set_info_value(&mut conn, "Title", "Legacy").unwrap();
+            let magnus = create_player(&mut conn, "Magnus").unwrap();
+            assert_eq!(journal_mode(&mut conn), "delete");
+            assert_eq!(migrate::read_user_version(&mut conn).unwrap(), 0);
+            magnus.id
+        };
+
+        let pools = DashMap::new();
+        let mut conn = open_pooled(&pools, &path, ConnectionOptions::default()).unwrap();
+
+        assert_eq!(migrate::read_user_version(&mut conn).unwrap(), 1);
+        assert_eq!(journal_mode(&mut conn), "wal");
+        let magnus: Player = players::table.find(magnus_id).first(&mut conn).unwrap();
+        assert_eq!(magnus.name.as_deref(), Some("Magnus"));
+        assert_eq!(
+            info_value(&mut conn, "Version").as_deref(),
+            Some(DATABASE_VERSION)
+        );
+        assert_eq!(info_value(&mut conn, "Title").as_deref(), Some("Legacy"));
+    }
+
+    #[test]
+    fn database_from_a_newer_chessin_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_db_path(&dir, "future.db3");
+        {
+            let mut conn = SqliteConnection::establish(&path).unwrap();
+            conn.batch_execute(CREATE_TABLES_SQL).unwrap();
+            conn.batch_execute(&format!(
+                "PRAGMA user_version = {};",
+                migrate::CURRENT_VERSION + 1
+            ))
+            .unwrap();
+        }
+
+        let pools = DashMap::new();
+        let err = open_pooled(&pools, &path, ConnectionOptions::default())
+            .map(|_| ())
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("newer Chessin"),
+            "unexpected error: {err}"
+        );
+        // A refused database must not leave a usable pool behind.
+        assert!(pools.is_empty());
+
+        // The stamp is untouched, so a newer build can still open it.
+        let mut conn = SqliteConnection::establish(&path).unwrap();
+        assert_eq!(
+            migrate::read_user_version(&mut conn).unwrap(),
+            migrate::CURRENT_VERSION as i32 + 1
+        );
+    }
+
+    #[test]
+    fn bulk_import_on_dedicated_connection_is_visible_to_pooled_reads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_db_path(&dir, "imported.db3");
+        let pgn_path = dir.path().join("games.pgn");
+        std::fs::write(
+            &pgn_path,
+            r#"[Event "Test Open"]
+[Site "Lisbon"]
+[Date "2026.02.27"]
+[UTCTime "12:00:00"]
+[White "Magnus"]
+[Black "Hikaru"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0
+
+[Event "Test Open"]
+[Site "Lisbon"]
+[Date "2026.02.28"]
+[UTCTime "13:00:00"]
+[White "Hikaru"]
+[Black "Fabiano"]
+[Result "1/2-1/2"]
+
+1. d4 d5 2. c4 e6 1/2-1/2
+"#,
+        )
+        .unwrap();
+
+        // convert_pgn's sequence, minus the Tauri plumbing.
+        let mut db = open_bulk_import_connection(&path).unwrap();
+        assert_eq!(journal_mode(&mut db), "wal");
+        assert_eq!(pragma_int(&mut db, "synchronous"), 1, "NORMAL until import");
+        assert_eq!(
+            migrate::migrate(&mut db).unwrap(),
+            migrate::MigrationOutcome::Created
+        );
+        set_info_value(&mut db, "Version", DATABASE_VERSION).unwrap();
+        set_info_value(&mut db, "Title", "Imported").unwrap();
+
+        let mut progress_calls = 0usize;
+        bulk_import(&mut db, &[pgn_path], None, true, |count, file| {
+            progress_calls += 1;
+            assert_eq!(count, 0);
+            assert_eq!(file, Some("games.pgn"));
+        })
+        .unwrap();
+        assert_eq!(progress_calls, 1);
+        assert_eq!(pragma_int(&mut db, "synchronous"), 0, "OFF during import");
+
+        finish_bulk_import(&mut db).unwrap();
+        assert_eq!(pragma_int(&mut db, "synchronous"), 1, "NORMAL after import");
+        // The checkpoint folded the WAL into the main file and truncated it.
+        let wal_len = std::fs::metadata(format!("{path}-wal"))
+            .map(|m| m.len())
+            .unwrap_or(0);
+        assert_eq!(wal_len, 0);
+
+        // A pooled connection (what every other command uses) sees the rows.
+        let pools = DashMap::new();
+        let mut conn = open_pooled(&pools, &path, ConnectionOptions::default()).unwrap();
+        assert_eq!(journal_mode(&mut conn), "wal");
+        assert_eq!(migrate::read_user_version(&mut conn).unwrap(), 1);
+        let game_count: i64 = games::table.count().get_result(&mut conn).unwrap();
+        assert_eq!(game_count, 2);
+        let player_count: i64 = players::table.count().get_result(&mut conn).unwrap();
+        assert_eq!(player_count, 4, "Unknown + Magnus + Hikaru + Fabiano");
+        assert_eq!(info_value(&mut conn, "GameCount").as_deref(), Some("2"));
+        assert_eq!(info_value(&mut conn, "PlayerCount").as_deref(), Some("4"));
+        assert_eq!(info_value(&mut conn, "EventCount").as_deref(), Some("2"));
+        assert_eq!(info_value(&mut conn, "SiteCount").as_deref(), Some("2"));
+        assert_eq!(info_value(&mut conn, "Title").as_deref(), Some("Imported"));
+        assert!(check_index_exists(&mut conn).unwrap());
+
+        // Importing again into the existing database appends without
+        // recreating anything.
+        drop(conn);
+        let mut db = open_bulk_import_connection(&path).unwrap();
+        assert_eq!(
+            migrate::migrate(&mut db).unwrap(),
+            migrate::MigrationOutcome::UpToDate
+        );
+        let pgn_path = dir.path().join("games.pgn");
+        bulk_import(&mut db, &[pgn_path], None, false, |_, _| {}).unwrap();
+        finish_bulk_import(&mut db).unwrap();
+        let mut conn = open_pooled(&pools, &path, ConnectionOptions::default()).unwrap();
+        let game_count: i64 = games::table.count().get_result(&mut conn).unwrap();
+        assert_eq!(game_count, 4);
+        assert_eq!(info_value(&mut conn, "GameCount").as_deref(), Some("4"));
     }
 }
