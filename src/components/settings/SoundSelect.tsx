@@ -9,9 +9,9 @@ type Item = {
   value: string;
 };
 
+// Chessin: "lisp" (CC BY-NC-SA 4.0) was removed, see docs/THIRD_PARTY_ASSETS.md.
 const soundCollections: Item[] = [
   { label: "Futuristic", value: "futuristic" },
-  { label: "Lisp", value: "lisp" },
   { label: "NES", value: "nes" },
   { label: "Piano", value: "piano" },
   { label: "Robot", value: "robot" },

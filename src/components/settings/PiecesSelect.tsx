@@ -11,7 +11,7 @@ import {
 import { useAtom } from "jotai";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { is3dAtom, pieceSetAtom } from "@/state/atoms";
+import { is3dAtom, PIECE_SETS_2D, PIECE_SETS_3D, pieceSetAtom } from "@/state/atoms";
 import PieceComponent from "../common/Piece";
 
 type Item = {
@@ -19,52 +19,14 @@ type Item = {
   value: string;
 };
 
-const pieceSets2d: Item[] = [
-  { label: "Alpha", value: "alpha" },
-  { label: "Anarcandy", value: "anarcandy" },
-  { label: "California", value: "california" },
-  { label: "Cardinal", value: "cardinal" },
-  { label: "Cburnett", value: "cburnett" },
-  { label: "Chess7", value: "chess7" },
-  { label: "Chessnut", value: "chessnut" },
-  { label: "Companion", value: "companion" },
-  { label: "Disguised", value: "disguised" },
-  { label: "Dubrovny", value: "dubrovny" },
-  { label: "Fantasy", value: "fantasy" },
-  { label: "Fresca", value: "fresca" },
-  { label: "Gioco", value: "gioco" },
-  { label: "Governor", value: "governor" },
-  { label: "Horsey", value: "horsey" },
-  { label: "ICpieces", value: "icpieces" },
-  { label: "Kosal", value: "kosal" },
-  { label: "Leipzig", value: "leipzig" },
-  { label: "Letter", value: "letter" },
-  { label: "Libra", value: "libra" },
-  { label: "Maestro", value: "maestro" },
-  { label: "Merida", value: "merida" },
-  { label: "Pirouetti", value: "pirouetti" },
-  { label: "Pixel", value: "pixel" },
-  { label: "Reillycraig", value: "reillycraig" },
-  { label: "Riohacha", value: "riohacha" },
-  { label: "Shapes", value: "shapes" },
-  { label: "Spatial", value: "spatial" },
-  { label: "Staunty", value: "staunty" },
-  { label: "Tatiana", value: "tatiana" },
-];
+// Chessin: the lists live in src/state/atoms.ts (they also validate the stored value);
+// NC / unlicensed sets were removed, see docs/THIRD_PARTY_ASSETS.md.
+const pieceSets2d: Item[] = PIECE_SETS_2D.map((value) => ({
+  label: value.charAt(0).toUpperCase() + value.slice(1),
+  value,
+}));
 
-const pieceSets3d = [
-  { label: "Basic", value: "Basic" },
-  { label: "CubesAndPi", value: "CubesAndPi" },
-  { label: "Experimental", value: "Experimental" },
-  { label: "Glass", value: "Glass" },
-  { label: "Metal", value: "Metal" },
-  { label: "ModernJade", value: "ModernJade" },
-  { label: "ModernWood", value: "ModernWood" },
-  { label: "RedVBlue", value: "RedVBlue" },
-  { label: "Staunton", value: "Staunton" },
-  { label: "Trimmed", value: "Trimmed" },
-  { label: "Wood", value: "Wood" },
-];
+const pieceSets3d: Item[] = PIECE_SETS_3D.map((value) => ({ label: value, value }));
 
 function DisplayPieces() {
   const pieces = ["rook", "knight", "bishop", "queen", "king", "pawn"] as const;

@@ -208,7 +208,49 @@ export const soundVolumeAtom = atomWithStorage<number>("sound-volume", 0.8, unde
     getOnInit: true,
 });
 
-export const pieceSetAtom = atomWithStorage<string>("piece-set", "staunty");
+// Chessin: the piece sets that ship in public/pieces (2D) and public/pieces-3d (3D).
+// Keep in sync with the CSS files there and with docs/THIRD_PARTY_ASSETS.md.
+// NC-licensed and unlicensed sets (incl. EC's old default "staunty") were removed on 2026-10-21.
+export const PIECE_SETS_2D = [
+    "cburnett",
+    "chess7",
+    "chessnut",
+    "companion",
+    "fantasy",
+    "leipzig",
+    "letter",
+    "merida",
+    "pirouetti",
+    "pixel",
+    "shapes",
+    "spatial",
+] as const;
+export const PIECE_SETS_3D = [
+    "Basic",
+    "CubesAndPi",
+    "Experimental",
+    "Glass",
+    "Metal",
+    "ModernJade",
+    "ModernWood",
+    "RedVBlue",
+    "Staunton",
+    "Trimmed",
+    "Wood",
+] as const;
+export const DEFAULT_PIECE_SET = "cburnett";
+
+const knownPieceSets: ReadonlySet<string> = new Set([...PIECE_SETS_2D, ...PIECE_SETS_3D]);
+const storedPieceSetAtom = atomWithStorage<string>("piece-set", DEFAULT_PIECE_SET);
+// Chessin: a profile may still store a set that no longer ships (e.g. "staunty");
+// fall back to the default instead of pointing the <link> in App.tsx at a missing CSS file.
+export const pieceSetAtom = atom(
+    (get) => {
+        const stored = get(storedPieceSetAtom);
+        return knownPieceSets.has(stored) ? stored : DEFAULT_PIECE_SET;
+    },
+    (_get, set, value: string) => set(storedPieceSetAtom, value),
+);
 export const boardImageAtom = atomWithStorage<string>("board-image", "gray.svg");
 export const is3dAtom = atomWithStorage<boolean>("is-3d", false);
 export const primaryColorAtom = atomWithStorage<MantineColor>("mantine-primary-color", "blue");

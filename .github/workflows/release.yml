@@ -71,8 +71,10 @@ jobs:
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          # Chessin's own minisign key (the public half is plugins.updater.pubkey in
+          # src-tauri/tauri.chessin.conf.json). Never En Croissant's key.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           CI: false
         with:
           tagName: ${{ github.ref_name }}
@@ -80,4 +82,7 @@ jobs:
           releaseBody: "See the assets to download and install this version."
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          # latest.json is what plugins.updater.endpoints in the overlay points at
+          includeUpdaterJson: true
+          # Chessin overlay: product name, identifier, deep link, updater key/endpoint, CSP
+          args: --config src-tauri/tauri.chessin.conf.json ${{ matrix.args }}

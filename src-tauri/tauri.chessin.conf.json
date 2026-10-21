@@ -10,9 +10,10 @@
       }
     },
     "updater": {
-      "active": false,
-      "pubkey": "",
-      "endpoints": []
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERFOEQyNkEzNUE4NzE2NTQKUldSVUZvZGFveWFOM3ErSWZPSkZxcmtiVXBWTWJrOEo5bmh4UHFRTE50ZmY4TzVTc3AySXY1U2IK",
+      "endpoints": [
+        "https://github.com/MikhailXiaomaikou/Chessin/releases/latest/download/latest.json"
+      ]
     }
   },
   "app": {
@@ -22,6 +23,10 @@
         "visible": false,
         "decorations": true
       }
-    ]
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob: https:; media-src 'self' asset: http://asset.localhost blob: http://127.0.0.1:*; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:*; frame-src 'none'; object-src 'none'; base-uri 'self'",
+      "devCsp": "default-src 'self' http://localhost:1420; script-src 'self' 'unsafe-inline' http://localhost:1420; style-src 'self' 'unsafe-inline' http://localhost:1420; img-src 'self' http://localhost:1420 asset: http://asset.localhost data: blob: https:; media-src 'self' asset: http://asset.localhost blob: http://127.0.0.1:*; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420 ws://localhost:1421 http://127.0.0.1:*; frame-src 'none'; object-src 'none'; base-uri 'self'"
+    }
   }
 }
