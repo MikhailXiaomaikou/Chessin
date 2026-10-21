@@ -10,6 +10,19 @@ export const commands = {
  */
 async chessinPing() : Promise<string> {
     return await TAURI_INVOKE("plugin:chessin|chessin_ping");
+},
+/**
+ * Converts a ChessBase `.cbh` database (the sibling `.cbg`, `.cba`, `.cbp`,
+ * `.cbt`, `.cbc` and `.cbs` files are found next to it) into one PGN file at
+ * `out_pgn_path`, which the frontend then imports with `convert_pgn`.
+ */
+async cbhToPgn(cbhPath: string, outPgnPath: string) : Promise<Result<CbhImportReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|cbh_to_pgn", { cbhPath, outPgnPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -23,7 +36,39 @@ async chessinPing() : Promise<string> {
 
 /** user-defined types **/
 
-
+/**
+ * What [`convert_to_pgn`] did.
+ */
+export type CbhImportReport = { 
+/**
+ * Records in the database: games, guiding texts and deleted games.
+ */
+games: number; 
+/**
+ * Games written to the PGN file.
+ */
+exported: number; 
+/**
+ * Records not written: deleted games, guiding texts and games that could
+ * not be decoded (each of the last has a warning).
+ */
+skipped: number; 
+/**
+ * Exported games that carry annotations.
+ */
+annotated: number; 
+/**
+ * Annotation types that were skipped, with counts.
+ */
+unsupported: UnsupportedAnnotation[]; 
+/**
+ * The detected text encoding of the database.
+ */
+encoding: string; warnings: string[] }
+/**
+ * One kind of annotation that was not translated, and how often it occurred.
+ */
+export type UnsupportedAnnotation = { kind: string; count: number }
 
 /** tauri-specta globals **/
 

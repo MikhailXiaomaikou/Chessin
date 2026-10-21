@@ -10,6 +10,7 @@ main window (see `src-tauri/capabilities/main.json`).
 #### This default permission set includes the following:
 
 - `allow-chessin-ping`
+- `allow-cbh-to-pgn`
 
 ## Permission Table
 
@@ -19,6 +20,32 @@ main window (see `src-tauri/capabilities/main.json`).
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`chessin:allow-cbh-to-pgn`
+
+</td>
+<td>
+
+Enables the cbh_to_pgn command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-cbh-to-pgn`
+
+</td>
+<td>
+
+Denies the cbh_to_pgn command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>

@@ -24,6 +24,13 @@ import { type Dispatch, type SetStateAction, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { KeyedMutator } from "swr";
 import { commands, type DatabaseInfo } from "@/bindings";
+import {
+  type CbhImportReport,
+  cbhToTempPgn,
+  isCbhPath,
+  removeTempPgn,
+  showCbhReport,
+} from "@/chessin/import/cbh";
 import { databaseConversionStateAtom, storedDatabasesDirAtom } from "@/state/atoms";
 import { type CatalogDatabaseInfo, getDatabases, useDefaultDatabases } from "@/utils/db";
 import { capitalize, formatBytes, formatNumber } from "@/utils/format";
@@ -71,10 +78,29 @@ function AddDatabase({
       targetDatabaseTitle: title,
       sourceFileName,
     }));
+    const tempPgnFiles: string[] = [];
+    const cbhReports: CbhImportReport[] = [];
     try {
-      unwrap(await commands.convertPgn(paths, dbPath, null, title, description ?? null));
+      // ChessBase databases are converted to PGN first, then imported like any PGN.
+      const pgnFiles = paths.filter((path) => !isCbhPath(path));
+      for (const cbhPath of paths.filter(isCbhPath)) {
+        const { pgnPath, report } = await cbhToTempPgn(cbhPath);
+        tempPgnFiles.push(pgnPath);
+        cbhReports.push(report);
+      }
+      unwrap(
+        await commands.convertPgn(
+          [...pgnFiles, ...tempPgnFiles],
+          dbPath,
+          null,
+          title,
+          description ?? null,
+        ),
+      );
       await setDatabases(await getDatabases());
+      showCbhReport(cbhReports);
     } finally {
+      await Promise.all(tempPgnFiles.map(removeTempPgn));
       setLoading(false);
       setConversionState((prev) => ({
         ...prev,
@@ -160,15 +186,23 @@ function AddDatabase({
             <TextInput label={t("Common.Description")} {...form.getInputProps("description")} />
 
             <FileInput
-              label={t("Common.PGNFile")}
-              description={t("Databases.Add.ClickToSelectPGN")}
+              label={t("Import.Cbh.FileLabel")}
+              description={t("Import.Cbh.ClickToSelect")}
               onClick={async () => {
                 const selected = await open({
                   multiple: true,
                   filters: [
                     {
+                      name: t("Import.Cbh.AnyFilter"),
+                      extensions: ["pgn", "pgn.zst", "cbh"],
+                    },
+                    {
                       name: "PGN file",
                       extensions: ["pgn", "pgn.zst"],
+                    },
+                    {
+                      name: t("Import.Cbh.FileFilter"),
+                      extensions: ["cbh"],
                     },
                   ],
                 });
@@ -189,7 +223,9 @@ function AddDatabase({
                     form.setFieldValue(
                       "title",
                       capitalize(
-                        firstFilename.replaceAll(/[_-]/g, " ").replace(/\.pgn(\.(zst|bz2))?$/i, ""),
+                        firstFilename
+                          .replaceAll(/[_-]/g, " ")
+                          .replace(/\.(pgn(\.(zst|bz2))?|cbh)$/i, ""),
                       ),
                     );
                   }

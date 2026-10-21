@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the cbh_to_pgn command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cbh-to-pgn",
+          "markdownDescription": "Enables the cbh_to_pgn command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the cbh_to_pgn command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cbh-to-pgn",
+          "markdownDescription": "Denies the cbh_to_pgn command without any pre-configured scope."
+        },
+        {
           "description": "Enables the chessin_ping command without any pre-configured scope.",
           "type": "string",
           "const": "allow-chessin-ping",
@@ -307,10 +319,10 @@
           "markdownDescription": "Denies the chessin_ping command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`",
+          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`"
+          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`"
         }
       ]
     }

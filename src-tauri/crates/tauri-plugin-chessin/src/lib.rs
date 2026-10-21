@@ -12,6 +12,8 @@ use tauri::{
     Runtime,
 };
 
+pub use chessin_cb::{CbhImportReport, UnsupportedAnnotation};
+
 /// Name the plugin is registered under.
 pub const PLUGIN_NAME: &str = "chessin";
 
@@ -30,10 +32,23 @@ fn chessin_ping() -> String {
     chessin_core::ping().to_string()
 }
 
+/// Converts a ChessBase `.cbh` database (the sibling `.cbg`, `.cba`, `.cbp`,
+/// `.cbt`, `.cbc` and `.cbs` files are found next to it) into one PGN file at
+/// `out_pgn_path`, which the frontend then imports with `convert_pgn`.
+#[tauri::command]
+#[specta::specta]
+async fn cbh_to_pgn(cbh_path: String, out_pgn_path: String) -> Result<CbhImportReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        chessin_cb::convert_to_pgn(&cbh_path, &out_pgn_path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 fn specta_builder<R: Runtime>() -> tauri_specta::Builder<R> {
     tauri_specta::Builder::<R>::new()
         .plugin_name(PLUGIN_NAME)
-        .commands(tauri_specta::collect_commands![chessin_ping])
+        .commands(tauri_specta::collect_commands![chessin_ping, cbh_to_pgn])
 }
 
 #[cfg(any(debug_assertions, test))]
@@ -72,6 +87,16 @@ mod tests {
         assert_eq!(chessin_ping(), "pong");
     }
 
+    #[test]
+    fn cbh_to_pgn_reports_a_missing_database() {
+        let err = tauri::async_runtime::block_on(cbh_to_pgn(
+            "/nonexistent/games.cbh".to_string(),
+            "/nonexistent/out.pgn".to_string(),
+        ))
+        .unwrap_err();
+        assert!(err.contains("games.cbh"), "{err}");
+    }
+
     /// The committed `src/chessin/bindings.ts` must match what a debug build of
     /// the app would export, so the frontend never drifts from the Rust side.
     #[test]
@@ -83,7 +108,17 @@ mod tests {
             .unwrap_or_else(|e| panic!("read {BINDINGS_PATH}: {e}"));
         assert_eq!(
             committed, expected,
-            "src/chessin/bindings.ts is stale; run `pnpm dev:chessin` once to regenerate it"
+            "src/chessin/bindings.ts is stale; run `pnpm dev:chessin` once, or `cargo test -p tauri-plugin-chessin -- --ignored write_bindings`, to regenerate it"
         );
+    }
+
+    /// Rewrites `src/chessin/bindings.ts` without launching the app:
+    /// `cargo test -p tauri-plugin-chessin -- --ignored write_bindings`.
+    #[test]
+    #[ignore = "writes the committed bindings; run on demand"]
+    fn write_bindings() {
+        specta_builder::<tauri::Wry>()
+            .export(typescript(), BINDINGS_PATH)
+            .expect("export bindings");
     }
 }

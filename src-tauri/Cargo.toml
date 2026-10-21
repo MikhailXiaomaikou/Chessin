@@ -86,6 +86,7 @@ members = ["crates/*"]
 exclude = ["vendor/vampirc-uci"]
 
 [workspace.dependencies]
+chessin-cb = { path = "crates/chessin-cb" }
 chessin-core = { path = "crates/chessin-core" }
 tauri-plugin-chessin = { path = "crates/tauri-plugin-chessin" }
 tauri = "2.10.2"

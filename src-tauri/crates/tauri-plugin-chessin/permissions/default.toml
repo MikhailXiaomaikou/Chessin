@@ -11,4 +11,4 @@ main window (see `src-tauri/capabilities/main.json`).
 
 """
 
-permissions = ["allow-chessin-ping"]
+permissions = ["allow-chessin-ping", "allow-cbh-to-pgn"]
