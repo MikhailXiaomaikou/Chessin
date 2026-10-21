@@ -747,6 +747,7 @@ pub fn generate_search_index(
     info!("Generating search index at {:?}", index_path);
     let start = Instant::now();
 
+    #[allow(clippy::type_complexity)]
     let games: Vec<(
         i32,
         i32,

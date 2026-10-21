@@ -729,46 +729,69 @@ mod tests {
         assert_eq!(naive_eval(&position), 0);
     }
 
+    // The expected scores below are expressed in the units of `piece_value`
+    // (P=90, N=B=300, R=500, Q=1000; checkmate=10000), from the point of view
+    // of the side to move, after `qsearch` has resolved the capture sequences.
+
     #[test]
     fn eval_hanging_pawn() {
+        // 3...dxe4 wins the e4 pawn (+90); 4.Bxc6 bxc6 is an even trade.
         let position = pos("r1bqkbnr/ppp1pppp/2n5/1B1p4/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3");
-        assert_eq!(naive_eval(&position), 100);
+        assert_eq!(naive_eval(&position), 90);
     }
 
     #[test]
     fn eval_complex_center() {
+        // 4.Nxe5 wins the e5 pawn (+90): Nc6 is pinned by Bb5 and cannot recapture.
         let position = pos("r1bqkbnr/ppp2ppp/2n5/1B1pp3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4");
-        assert_eq!(naive_eval(&position), 100);
+        assert_eq!(naive_eval(&position), 90);
     }
 
     #[test]
     fn eval_in_check() {
+        // Black is in check and a knight down (-300) after Bxc6+. 4...bxc6 wins
+        // the bishop back (0) and 5.Nxe5 then picks up the e5 pawn: -90.
         let position = pos("r1bqkbnr/ppp2ppp/2B5/3pp3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 0 4");
-        assert_eq!(naive_eval(&position), -100);
+        assert_eq!(naive_eval(&position), -90);
     }
 
     #[test]
     fn eval_rook_stack() {
-        let position = pos("rnrq4/8/8/1R6/1R6/1R5K/1Q6/7k w - - 0 1");
+        // Three rooks and the queen stacked on the b-file against Nb8, which is
+        // defended by Ra8, Rc8 and Qd8. Static material is 3R+Q (2500) vs
+        // 2R+N+Q (2300) = +200, and 1.Rxb8 wins the knight (+300) because every
+        // recapture is answered by the next piece in the battery: 500.
+        // The black king is on g8: on h1 (the original placement) White has
+        // 1.Qg2#, which scores 10000 and hides the exchange being tested.
+        let position = pos("rnrq2k1/8/8/1R6/1R6/1R5K/1Q6/8 w - - 0 1");
         assert_eq!(naive_eval(&position), 500);
     }
 
     #[test]
     fn eval_rook_stack2() {
-        let position = pos("rnrq4/8/8/1R6/1Q6/1R5K/1R6/7k w - - 0 1");
+        // Same battery with the queen second in line, so 1.Rxb8 Rxb8 2.Qxb8 Rxb8
+        // loses the queen. White's best is a quiet move, keeping the static
+        // 3R+Q (2500) vs 2R+N+Q (2300) = 200.
+        // Black king on g8 for the same reason as in eval_rook_stack (1.Qe1#).
+        let position = pos("rnrq2k1/8/8/1R6/1Q6/1R5K/1R6/8 w - - 0 1");
         assert_eq!(naive_eval(&position), 200);
     }
 
     #[test]
     fn eval_opera_game1() {
+        // White is down R+N for B+2P (-320). 14.Bxd7+ Kxd7 (or Nxd7) wins the
+        // rook back for the bishop: -320 + 500 - 300 = -120.
         let position = pos("4kb1r/p2rqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2K4R w k - 0 14");
-        assert_eq!(naive_eval(&position), -100);
+        assert_eq!(naive_eval(&position), -120);
     }
 
     #[test]
     fn eval_opera_game2() {
+        // Black is up R+N for B+2P (+320), but after 14...Qb4 15.Qxb4 Bxb4
+        // 16.Bxf6 the knight is lost (-300): 16...gxf6 17.Bxd7+ would cost the
+        // pinned rook, since Rd1 now protects the bishop on d7. 320 - 300 = 20.
         let position = pos("4kb1r/p2rqppp/5n2/1B2p1B1/4P3/1Q6/PPP2PPP/2KR4 b k - 1 14");
-        assert_eq!(naive_eval(&position), 0);
+        assert_eq!(naive_eval(&position), 20);
     }
 }
 

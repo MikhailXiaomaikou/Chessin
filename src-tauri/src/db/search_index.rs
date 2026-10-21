@@ -180,6 +180,7 @@ impl<'a> From<&'a ArchivedSearchGameEntry> for SearchGameEntryRef<'a> {
 }
 
 impl SearchGameEntry {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_game_data(
         id: i32,
         white_id: i32,

@@ -642,21 +642,30 @@ mod tests {
 
     #[test]
     fn get_move_after_exact_match_test() {
+        // One byte per ply, each the index into shakmaty's `legal_moves()` for
+        // the current position: 12 is e2e4 from the start and e7e5 after it.
         let game = vec![12, 12]; // 1. e4 e5
 
-        let query =
-            PositionQuery::exact_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR").unwrap();
+        // An exact query also matches on the side to move, so each FEN must
+        // carry the correct turn (a board-only FEN defaults to White to move).
+        let query = PositionQuery::exact_from_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        )
+        .unwrap();
         let result = get_move_after_match(&game, &None, &query).unwrap();
         assert_eq!(result, Some("e4".to_string()));
 
-        let query =
-            PositionQuery::exact_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR").unwrap();
+        let query = PositionQuery::exact_from_fen(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+        )
+        .unwrap();
         let result = get_move_after_match(&game, &None, &query).unwrap();
         assert_eq!(result, Some("e5".to_string()));
 
-        let query =
-            PositionQuery::exact_from_fen("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR")
-                .unwrap();
+        let query = PositionQuery::exact_from_fen(
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2",
+        )
+        .unwrap();
         let result = get_move_after_match(&game, &None, &query).unwrap();
         assert_eq!(result, Some("*".to_string()));
     }
