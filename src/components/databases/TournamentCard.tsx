@@ -1,7 +1,5 @@
 import { ActionIcon, Paper, Stack, Tabs, Text, useMantineTheme } from "@mantine/core";
 import { IconEye } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
-import { useAtom, useSetAtom } from "jotai";
 import { DataTable, type DataTableSortStatus } from "mantine-datatable";
 import { useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,10 +7,9 @@ import useSWRImmutable from "swr/immutable";
 import { match } from "ts-pattern";
 import { useStore } from "zustand";
 import type { Event, NormalizedGame } from "@/bindings";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
+import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
 import type { DatabaseViewStore } from "@/state/store/database";
 import { getTournamentGames } from "@/utils/db";
-import { createTab } from "@/utils/tabs";
 import { DatabaseViewStateContext } from "./DatabaseViewStateContext";
 
 const gamePoints = (game: NormalizedGame, player: string) => {
@@ -37,9 +34,7 @@ function TournamentCard({ tournament, file }: { tournament: Event; file: string 
   const setTournamentsActiveTab = useStore(store, (s) => s.setTournamentsActiveTab);
 
   const theme = useMantineTheme();
-  const navigate = useNavigate();
-  const [, setTabs] = useAtom(tabsAtom);
-  const setActiveTab = useSetAtom(activeTabAtom);
+  const openInWorkspace = useOpenInWorkspace();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
@@ -143,13 +138,11 @@ function TournamentCard({ tournament, file }: { tournament: Event; file: string 
                       variant="filled"
                       color={theme.primaryColor}
                       onClick={() => {
-                        createTab({
+                        openInWorkspace({
                           tab: {
                             name: `${game.white} - ${game.black}`,
                             type: "analysis",
                           },
-                          setTabs,
-                          setActiveTab,
                           pgn: game.moves,
                           headers: game,
                           gameOrigin: {
@@ -158,7 +151,6 @@ function TournamentCard({ tournament, file }: { tournament: Event; file: string 
                             gameId: game.id,
                           },
                         });
-                        navigate({ to: "/" });
                       }}
                     >
                       <IconEye size="1rem" stroke={1.5} />

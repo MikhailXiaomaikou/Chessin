@@ -31,6 +31,7 @@ import { RESET } from "jotai/utils";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keybindLabel } from "@/chessin/keymap/labels";
+import { MigrateSettingsButton } from "@/chessin/migrate/MigrateModal";
 import {
   applyPreset,
   countCustomised,
@@ -39,6 +40,7 @@ import {
   keymapPresetAtom,
   presetLabel,
 } from "@/chessin/keymap/presets";
+import { autoSyncAtom } from "@/chessin/sync/autoSync";
 import {
   autoPromoteAtom,
   autoSaveAtom,
@@ -321,6 +323,14 @@ export default function Page() {
         description: t("Settings.AutoSave.Desc"),
         keywords: ["save", "auto"],
         render: () => <SettingsSwitch atom={autoSaveAtom} />,
+      },
+      {
+        id: "auto-sync",
+        category: "board",
+        title: t("Sync.Settings.AutoSync"),
+        description: t("Sync.Settings.AutoSync.Desc"),
+        keywords: ["sync", "accounts", "lichess", "chess.com", "startup", "同步", "账号"],
+        render: () => <SettingsSwitch atom={autoSyncAtom} />,
       },
       {
         id: "preview-board",
@@ -650,6 +660,15 @@ export default function Page() {
             filename={puzzlesDirectory || null}
           />
         ),
+      },
+      // Chessin: copy an existing En Croissant installation's data into these directories
+      {
+        id: "migrate-en-croissant",
+        category: "directories",
+        title: t("Migrate.Settings.Title"),
+        description: t("Migrate.Settings.Desc"),
+        keywords: ["migrate", "en croissant", "import", "engines", "databases", "迁移", "搬家"],
+        render: () => <MigrateSettingsButton />,
       },
     ],
     [

@@ -12,6 +12,16 @@
 //!   [`VERSION_MERGE_MS`]; a labelled version (a checkpoint) is never overwritten;
 //! - `trash`: one row per path moved to the OS recycle bin.
 //!
+//! Schema v2 adds (each in its own submodule):
+//!
+//! - `jobs` ([`jobs`]): the persisted side of the frontend's background job
+//!   runner; a job left `running` by a crash is put back to `queued` on open;
+//! - `eval_cache` ([`eval_cache`]): one engine evaluation per (position,
+//!   engine), only ever replaced by a deeper or equally deep one;
+//! - `cards` and `card_logs` ([`cards`]): the training cards of the mistake
+//!   notebook with their review log. The FSRS scheduling stays in TypeScript;
+//!   the store only orders by `due` and counts.
+//!
 //! Game databases stay in En Croissant's `.db3` format so that En Croissant can
 //! still open a Chessin library; anything Chessin adds there goes into `chessin_*`
 //! tables with their own migrations, plus the side-car `.cpi` position index.
@@ -19,11 +29,19 @@
 //! Timestamps are Unix milliseconds. Every method takes `&self`/`&mut self` on a
 //! single connection; the plugin serialises access with a mutex.
 
+mod cards;
+mod eval_cache;
+mod jobs;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection, OptionalExtension};
+
+pub use cards::{CardLog, CardRecord, CardStats, DAY_MS};
+pub use eval_cache::CachedEval;
+pub use jobs::{JobRecord, FINISHED_JOB_STATUSES};
 
 /// Versions kept per document; older ones are dropped when a new one is written.
 pub const VERSION_CAP: usize = 50;
@@ -68,6 +86,53 @@ const MIGRATIONS: &[&str] = &[
         meta TEXT NOT NULL,
         deleted_at INTEGER NOT NULL
     );",
+    // v2: background jobs, the engine evaluation cache and the training cards.
+    "CREATE TABLE jobs (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        progress REAL NOT NULL,
+        result TEXT,
+        error TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX jobs_status_created_at ON jobs (status, created_at);
+    CREATE TABLE eval_cache (
+        epd TEXT NOT NULL,
+        engine TEXT NOT NULL,
+        depth INTEGER NOT NULL,
+        score_type TEXT NOT NULL,
+        score_value INTEGER NOT NULL,
+        best_uci TEXT NOT NULL,
+        pv TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (epd, engine)
+    );
+    CREATE TABLE cards (
+        id TEXT PRIMARY KEY,
+        epd TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        source TEXT,
+        due INTEGER NOT NULL,
+        fsrs TEXT NOT NULL,
+        meta TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX cards_due ON cards (due);
+    CREATE TABLE card_logs (
+        id INTEGER PRIMARY KEY,
+        card_id TEXT NOT NULL REFERENCES cards (id) ON DELETE CASCADE,
+        reviewed_at INTEGER NOT NULL,
+        rating INTEGER NOT NULL,
+        log TEXT NOT NULL
+    );
+    CREATE INDEX card_logs_card_id ON card_logs (card_id, reviewed_at);
+    CREATE INDEX card_logs_reviewed_at ON card_logs (reviewed_at);",
 ];
 
 /// Errors of the store.
@@ -87,6 +152,8 @@ pub enum Error {
     NoSuchDocument { id: String },
     #[error("document {doc_id} has no version {version_id}")]
     NoSuchVersion { doc_id: String, version_id: i64 },
+    #[error("no card {id}")]
+    NoSuchCard { id: String },
 }
 
 /// A document with its JSON payload.
@@ -187,6 +254,8 @@ impl Library {
         conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         migrate(&mut conn)?;
+        // Crash recovery: nothing can still be running when the file is opened.
+        jobs::requeue_running(&conn, now_ms())?;
         Ok(Library { conn })
     }
 
@@ -520,6 +589,32 @@ mod tests {
         let lib = Library::open(&path).unwrap();
         assert_eq!(lib.kv_get("a").unwrap().as_deref(), Some("1"));
         assert_eq!(lib.schema_version().unwrap(), SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn a_v1_library_is_upgraded_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("library.sqlite");
+        {
+            // A file as S1b-1 wrote it: only the v1 tables, user_version 1.
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(MIGRATIONS[0]).unwrap();
+            conn.pragma_update(None, "user_version", 1).unwrap();
+            conn.execute(
+                "INSERT INTO kv (key, value, updated_at) VALUES ('a', '1', 0)",
+                [],
+            )
+            .unwrap();
+        }
+        let lib = Library::open(&path).unwrap();
+        assert_eq!(lib.schema_version().unwrap(), 2);
+        assert_eq!(lib.kv_get("a").unwrap().as_deref(), Some("1"));
+        assert!(lib.job_list(None).unwrap().is_empty());
+        assert_eq!(lib.card_stats(0).unwrap(), CardStats::default());
+        assert!(lib
+            .eval_cache_get(&["x".to_string()], "e", 0)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

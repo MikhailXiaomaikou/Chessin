@@ -7,12 +7,11 @@ import {
   IconTarget,
   IconTrash,
 } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
 import { basename, join, sep } from "@tauri-apps/api/path";
 import { rename } from "@tauri-apps/plugin-fs";
 import clsx from "clsx";
 import Fuse from "fuse.js";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom } from "jotai";
 import { useContextMenu } from "mantine-contextmenu";
 import Draggable, { type DraggableEvent } from "react-draggable";
 import {
@@ -25,8 +24,8 @@ import {
   useContext,
 } from "react";
 import { useTrashActionLabel } from "@/chessin/trash/TrashNotice";
-import { activeTabAtom, deckAtomFamily, tabsAtom, expandedDirectoriesAtom } from "@/state/atoms";
-import { openFile } from "@/utils/files";
+import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
+import { deckAtomFamily, expandedDirectoriesAtom } from "@/state/atoms";
 import classes from "./DirectoryTree.module.css";
 import type { Directory, FileMetadata } from "./file";
 import { getStats } from "./opening";
@@ -186,17 +185,14 @@ function Tree({
   expandedByDefault?: boolean;
 }) {
   const [expandedIds, setExpandedIds] = useAtom(expandedDirectoriesAtom);
-  const navigate = useNavigate();
-  const [, setTabs] = useAtom(tabsAtom);
-  const setActiveTab = useSetAtom(activeTabAtom);
+  const openInWorkspace = useOpenInWorkspace();
   const { showContextMenu } = useContextMenu();
 
   const handleOpenFile = useCallback(
     async (record: FileMetadata) => {
-      await openFile(record, setTabs, setActiveTab);
-      void navigate({ to: "/" });
+      await openInWorkspace({ file: record });
     },
-    [setActiveTab, setTabs, navigate],
+    [openInWorkspace],
   );
 
   const toggleExpand = (path: string, event: React.MouseEvent) => {

@@ -9,13 +9,10 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { IconTrash, IconZoomCheck } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
-import { useAtom, useSetAtom } from "jotai";
 import { useTranslation } from "react-i18next";
 import { useSWRConfig } from "swr";
 import { commands, type NormalizedGame } from "@/bindings";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
-import { createTab } from "@/utils/tabs";
+import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
 import GamePreview from "./GamePreview";
 import GameInfo from "../common/GameInfo";
 
@@ -29,11 +26,8 @@ function GameCard({
   mutate: () => void;
 }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const openInWorkspace = useOpenInWorkspace();
   const { mutate: globalMutate } = useSWRConfig();
-
-  const [, setTabs] = useAtom(tabsAtom);
-  const setActiveTab = useSetAtom(activeTabAtom);
 
   return (
     <Paper shadow="sm" p="sm" withBorder h="100%">
@@ -46,13 +40,11 @@ function GameCard({
               size="xs"
               leftSection={<IconZoomCheck size="1rem" stroke={1.5} />}
               onClick={() => {
-                createTab({
+                openInWorkspace({
                   tab: {
                     name: `${game.white} - ${game.black}`,
                     type: "analysis",
                   },
-                  setTabs,
-                  setActiveTab,
                   pgn: game.moves,
                   headers: game,
                   gameOrigin: {
@@ -61,7 +53,6 @@ function GameCard({
                     gameId: game.id,
                   },
                 });
-                navigate({ to: "/" });
               }}
             >
               {t("Board.Action.AnalyzeGame")}

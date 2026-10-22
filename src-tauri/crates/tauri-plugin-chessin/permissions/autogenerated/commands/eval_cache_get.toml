@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-eval-cache-get"
+description = "Enables the eval_cache_get command without any pre-configured scope."
+commands.allow = ["eval_cache_get"]
+
+[[permission]]
+identifier = "deny-eval-cache-get"
+description = "Denies the eval_cache_get command without any pre-configured scope."
+commands.deny = ["eval_cache_get"]

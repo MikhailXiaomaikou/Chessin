@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-card-log"
+description = "Enables the card_log command without any pre-configured scope."
+commands.allow = ["card_log"]
+
+[[permission]]
+identifier = "deny-card-log"
+description = "Denies the card_log command without any pre-configured scope."
+commands.deny = ["card_log"]

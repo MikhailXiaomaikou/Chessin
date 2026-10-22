@@ -1,11 +1,8 @@
 import { Text } from "@mantine/core";
-import { useNavigate } from "@tanstack/react-router";
-import { useAtom, useSetAtom } from "jotai";
 import { DataTable } from "mantine-datatable";
 import { memo, useEffect, useState } from "react";
 import type { NormalizedGame } from "@/bindings";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
-import { createTab } from "@/utils/tabs";
+import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
 
 function GamesTable({
   games,
@@ -16,8 +13,7 @@ function GamesTable({
   loading: boolean;
   databasePath?: string | null;
 }) {
-  const [, setTabs] = useAtom(tabsAtom);
-  const setActiveTab = useSetAtom(activeTabAtom);
+  const openInWorkspace = useOpenInWorkspace();
   const [page, setPage] = useState(1);
   const filteredGames = games.slice((page - 1) * 20, page * 20);
 
@@ -25,7 +21,6 @@ function GamesTable({
     setPage(1);
   }, [games]);
 
-  const navigate = useNavigate();
   return (
     <DataTable
       withTableBorder
@@ -38,13 +33,11 @@ function GamesTable({
       onPageChange={setPage}
       onRowClick={(e) => {
         const game = e.record;
-        createTab({
+        openInWorkspace({
           tab: {
             name: `${game.white} - ${game.black}`,
             type: "analysis",
           },
-          setTabs,
-          setActiveTab,
           pgn: game.moves,
           headers: game,
           gameOrigin: databasePath
@@ -55,7 +48,6 @@ function GamesTable({
               }
             : undefined,
         });
-        navigate({ to: "/" });
       }}
       columns={[
         {

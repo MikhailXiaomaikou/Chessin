@@ -20,6 +20,7 @@ import {
   IconDatabaseSearch,
   IconFileUpload,
   IconLoader2,
+  IconPackageImport,
   IconWorld,
 } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
@@ -30,6 +31,8 @@ import { warn } from "@tauri-apps/plugin-log";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import MigrateCard from "@/chessin/migrate/MigrateCard";
+import { useEnCroissantInstall } from "@/chessin/migrate/useEnCroissantInstall";
 import { useProgress } from "@/hooks/useProgress";
 import {
   activeTabAtom,
@@ -228,6 +231,10 @@ export default function FirstRun() {
   const [importedDbs, setImportedDbs] = useState<ImportedDatabase[]>([]);
   const [busy, setBusy] = useState(0);
   const [starting, setStarting] = useState(false);
+
+  // "从 En Croissant 迁移" step: only offered while an EC data dir with
+  // something to copy exists and no migration has been recorded yet.
+  const ecInstall = useEnCroissantInstall(opened);
 
   // Imports run strictly one after another (shared conversion state, and the
   // Lichess API prefers a single request at a time).
@@ -731,6 +738,25 @@ export default function FirstRun() {
               </Stack>
             )}
           </Paper>
+
+          {ecInstall && (
+            <Paper withBorder radius="md" p="md" component="section">
+              <Group gap="xs" mb={4}>
+                <IconPackageImport size="1.25rem" />
+                <Title order={3} size="h4">
+                  {t("Migrate.Title")}
+                </Title>
+              </Group>
+              <Text size="sm" c="dimmed" mb="md">
+                {t("Migrate.Desc")}
+              </Text>
+              <MigrateCard
+                install={ecInstall}
+                disabled={starting}
+                onRunningChange={(running) => setBusy((b) => b + (running ? 1 : -1))}
+              />
+            </Paper>
+          )}
 
           <Paper withBorder radius="md" p="md" component="section">
             <Group justify="space-between" align="center" wrap="nowrap">

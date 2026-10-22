@@ -7,9 +7,10 @@
 //! Commands are invoked from the frontend as `plugin:chessin|<command>`; the
 //! permissions are `chessin:default` / `chessin:allow-<command>`.
 //!
-//! The library store commands (`store_*`, `doc_*`, `move_to_trash`) share one
-//! SQLite connection to `<app_data_dir>/chessin/library.sqlite`, held in
-//! [`LibraryState`] and used from a blocking thread.
+//! The library store commands (`store_*`, `doc_*`, `move_to_trash`, `job_*`,
+//! `eval_cache_*`, `card_*`) share one SQLite connection to
+//! `<app_data_dir>/chessin/library.sqlite`, held in [`LibraryState`] and used
+//! from a blocking thread.
 
 mod library;
 mod scan;
@@ -24,7 +25,9 @@ use tauri::{
 use chessin_core::store::NewDocument;
 
 pub use chessin_cb::{CbhImportReport, UnsupportedAnnotation};
-pub use chessin_core::store::{Document, DocumentMeta, VersionMeta};
+pub use chessin_core::store::{
+    CachedEval, CardRecord, CardStats, Document, DocumentMeta, JobRecord, VersionMeta,
+};
 pub use library::LibraryState;
 pub use scan::ChessBaseDb;
 
@@ -168,6 +171,139 @@ async fn doc_restore_version(
         .await
 }
 
+// ----- library store: jobs ------------------------------------------------
+
+/// Inserts or replaces a background job, every field included; the frontend's
+/// job runner writes each transition through this.
+#[tauri::command]
+#[specta::specta]
+async fn job_upsert(job: JobRecord, state: State<'_, LibraryState>) -> Result<(), String> {
+    state.run(move |lib| lib.job_upsert(&job)).await
+}
+
+/// The jobs with `status` (`queued`, `running`, `done`, `failed`, `cancelled`;
+/// every status when `None`): running first, then queued, then finished,
+/// newest first within each group. A job left `running` by a crash is
+/// `queued` again once the library is reopened.
+#[tauri::command]
+#[specta::specta]
+async fn job_list(
+    status: Option<String>,
+    state: State<'_, LibraryState>,
+) -> Result<Vec<JobRecord>, String> {
+    state.run(move |lib| lib.job_list(status.as_deref())).await
+}
+
+/// Deletes a job; a missing one is not an error.
+#[tauri::command]
+#[specta::specta]
+async fn job_delete(id: String, state: State<'_, LibraryState>) -> Result<(), String> {
+    state.run(move |lib| lib.job_delete(&id)).await
+}
+
+/// Keeps the `keep_finished` most recently updated done/failed/cancelled jobs,
+/// deletes the other finished ones and returns how many were deleted.
+#[tauri::command]
+#[specta::specta]
+async fn job_prune(keep_finished: u32, state: State<'_, LibraryState>) -> Result<u32, String> {
+    state.run(move |lib| lib.job_prune(keep_finished)).await
+}
+
+// ----- library store: engine evaluation cache -----------------------------
+
+/// The cached evaluations of `epds` by `engine` whose depth reaches
+/// `min_depth`, each position at most once, in no particular order.
+#[tauri::command]
+#[specta::specta]
+async fn eval_cache_get(
+    epds: Vec<String>,
+    engine: String,
+    min_depth: u32,
+    state: State<'_, LibraryState>,
+) -> Result<Vec<CachedEval>, String> {
+    state
+        .run(move |lib| lib.eval_cache_get(&epds, &engine, min_depth))
+        .await
+}
+
+/// Caches evaluations; an entry only replaces the stored one of its
+/// (position, engine) when its depth is at least the stored depth.
+#[tauri::command]
+#[specta::specta]
+async fn eval_cache_put(
+    entries: Vec<CachedEval>,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    state.run(move |lib| lib.eval_cache_put(&entries)).await
+}
+
+// ----- library store: training cards --------------------------------------
+
+/// Inserts or replaces training cards, every field included; an existing
+/// card keeps its review log.
+#[tauri::command]
+#[specta::specta]
+async fn card_upsert(cards: Vec<CardRecord>, state: State<'_, LibraryState>) -> Result<(), String> {
+    state.run(move |lib| lib.card_upsert(&cards)).await
+}
+
+/// Up to `limit` cards due at or before `due_before` (every card when `None`),
+/// soonest due first.
+#[tauri::command]
+#[specta::specta]
+async fn card_list(
+    due_before: Option<i64>,
+    limit: u32,
+    state: State<'_, LibraryState>,
+) -> Result<Vec<CardRecord>, String> {
+    state.run(move |lib| lib.card_list(due_before, limit)).await
+}
+
+/// The card; `None` when it does not exist.
+#[tauri::command]
+#[specta::specta]
+async fn card_get(
+    id: String,
+    state: State<'_, LibraryState>,
+) -> Result<Option<CardRecord>, String> {
+    state.run(move |lib| lib.card_get(&id)).await
+}
+
+/// Deletes a card and its review log; a missing card is not an error.
+#[tauri::command]
+#[specta::specta]
+async fn card_delete(id: String, state: State<'_, LibraryState>) -> Result<(), String> {
+    state.run(move |lib| lib.card_delete(&id)).await
+}
+
+/// Records a review of the card (`rating` 1–4 as in FSRS, `log` the ts-fsrs
+/// `ReviewLog` as JSON); the card must exist.
+#[tauri::command]
+#[specta::specta]
+async fn card_log(
+    card_id: String,
+    reviewed_at: i64,
+    rating: u32,
+    log: String,
+    state: State<'_, LibraryState>,
+) -> Result<(), String> {
+    state
+        .run(move |lib| {
+            lib.card_log(&card_id, reviewed_at, rating, &log)
+                .map(|_| ())
+        })
+        .await
+}
+
+/// Counts the cards as of `now` (Unix milliseconds): total, due (`due <= now`),
+/// new (never graded) and reviewed today (distinct cards graded during the UTC
+/// calendar day that contains `now`).
+#[tauri::command]
+#[specta::specta]
+async fn card_stats(now: i64, state: State<'_, LibraryState>) -> Result<CardStats, String> {
+    state.run(move |lib| lib.card_stats(now)).await
+}
+
 // ----- trash and ChessBase scan -------------------------------------------
 
 /// Moves files and directories to the OS recycle bin, records each success in
@@ -219,6 +355,18 @@ fn specta_builder<R: Runtime>() -> tauri_specta::Builder<R> {
             doc_delete,
             doc_versions,
             doc_restore_version,
+            job_upsert,
+            job_list,
+            job_delete,
+            job_prune,
+            eval_cache_get,
+            eval_cache_put,
+            card_upsert,
+            card_list,
+            card_get,
+            card_delete,
+            card_log,
+            card_stats,
             move_to_trash,
             scan_chessbase,
         ])
@@ -301,6 +449,134 @@ mod tests {
         let rows = state.with(|lib| lib.trash_entries()).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].path, paths[0]);
+    }
+
+    /// The v2 store commands are one-liners over `LibraryState::run`; this
+    /// drives each table through the state on the async runtime, the way the
+    /// commands do.
+    #[test]
+    fn v2_store_commands_run_through_the_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = LibraryState::new(dir.path().join("library.sqlite"));
+        let job = JobRecord {
+            id: "j1".into(),
+            kind: "review".into(),
+            title: "Review".into(),
+            status: "running".into(),
+            payload: "{}".into(),
+            progress: 0.25,
+            result: None,
+            error: None,
+            created_at: 1_000,
+            updated_at: 1_000,
+        };
+        let eval = CachedEval {
+            epd: "8/8/8/8/8/8/8/K6k w - -".into(),
+            engine: "sf17".into(),
+            depth: 20,
+            score_type: "cp".into(),
+            score_value: 0,
+            best_uci: "a1a2".into(),
+            pv: "a1a2 h1h2".into(),
+        };
+        let card = CardRecord {
+            id: "fm:x".into(),
+            epd: "x".into(),
+            kind: "find_move".into(),
+            answer: "[\"e2e4\"]".into(),
+            source: None,
+            due: 500,
+            fsrs: "{}".into(),
+            meta: "{}".into(),
+            created_at: 100,
+            updated_at: 100,
+        };
+
+        tauri::async_runtime::block_on(async {
+            // Jobs.
+            state
+                .run({
+                    let job = job.clone();
+                    move |lib| lib.job_upsert(&job)
+                })
+                .await
+                .unwrap();
+            let done = JobRecord {
+                id: "j2".into(),
+                status: "done".into(),
+                ..job.clone()
+            };
+            state.run(move |lib| lib.job_upsert(&done)).await.unwrap();
+            let listed = state.run(|lib| lib.job_list(None)).await.unwrap();
+            assert_eq!(
+                listed.iter().map(|j| j.id.as_str()).collect::<Vec<_>>(),
+                ["j1", "j2"]
+            );
+            assert_eq!(listed[0], job);
+            assert_eq!(state.run(|lib| lib.job_prune(0)).await.unwrap(), 1);
+            state.run(|lib| lib.job_delete("j1")).await.unwrap();
+            assert!(state
+                .run(|lib| lib.job_list(None))
+                .await
+                .unwrap()
+                .is_empty());
+
+            // Eval cache.
+            state
+                .run({
+                    let entries = vec![eval.clone()];
+                    move |lib| lib.eval_cache_put(&entries)
+                })
+                .await
+                .unwrap();
+            let epds = vec![eval.epd.clone()];
+            let got = state
+                .run(move |lib| lib.eval_cache_get(&epds, "sf17", 10))
+                .await
+                .unwrap();
+            assert_eq!(got, vec![eval]);
+
+            // Cards.
+            state
+                .run({
+                    let cards = vec![card.clone()];
+                    move |lib| lib.card_upsert(&cards)
+                })
+                .await
+                .unwrap();
+            assert_eq!(
+                state.run(|lib| lib.card_get("fm:x")).await.unwrap(),
+                Some(card.clone())
+            );
+            assert_eq!(
+                state.run(|lib| lib.card_list(Some(500), 10)).await.unwrap(),
+                vec![card]
+            );
+            state
+                .run(|lib| lib.card_log("fm:x", 600, 3, "{}").map(|_| ()))
+                .await
+                .unwrap();
+            let stats = state.run(|lib| lib.card_stats(600)).await.unwrap();
+            assert_eq!(
+                stats,
+                CardStats {
+                    total: 1,
+                    due: 1,
+                    new: 0,
+                    reviewed_today: 1
+                }
+            );
+            let err = state
+                .run(|lib| lib.card_log("missing", 0, 1, "{}"))
+                .await
+                .unwrap_err();
+            assert!(err.contains("missing"), "{err}");
+            state.run(|lib| lib.card_delete("fm:x")).await.unwrap();
+            assert_eq!(
+                state.run(|lib| lib.card_stats(600)).await.unwrap(),
+                CardStats::default()
+            );
+        });
     }
 
     #[test]

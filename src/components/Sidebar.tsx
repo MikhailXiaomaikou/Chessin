@@ -6,6 +6,7 @@ import {
   IconCpu,
   IconDatabase,
   IconFiles,
+  IconNotebook,
   IconSettings,
   IconUser,
 } from "@tabler/icons-react";
@@ -40,7 +41,7 @@ function NavbarLink({ url, icon: Icon, label }: NavbarLinkProps) {
   );
 }
 
-const linksdata = [
+const linksdata: { icon: Icon; label: string; url: string; i18nKey?: string }[] = [
   { icon: IconChess, label: "Board", url: "/" },
   { icon: IconUser, label: "User", url: "/accounts" },
   { icon: IconFiles, label: "Files", url: "/files" },
@@ -50,13 +51,20 @@ const linksdata = [
     url: "/databases",
   },
   { icon: IconCpu, label: "Engines", url: "/engines" },
+  // Chessin: mistake notebook (S2-5); its name lives under `Notebook.Title`.
+  { icon: IconNotebook, label: "Notebook", url: "/notebook", i18nKey: "Notebook.Title" },
 ];
 
 export function SideBar() {
   const { t } = useTranslation();
 
   const links = linksdata.map((link) => (
-    <NavbarLink {...link} label={t(`SideBar.${link.label}`)} key={link.label} />
+    <NavbarLink
+      icon={link.icon}
+      url={link.url}
+      label={t(link.i18nKey ?? `SideBar.${link.label}`)}
+      key={link.label}
+    />
   ));
 
   return (

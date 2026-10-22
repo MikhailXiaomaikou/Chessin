@@ -1,13 +1,13 @@
 import { Button, Modal, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
-import { useLoaderData, useNavigate } from "@tanstack/react-router";
+import { useLoaderData } from "@tanstack/react-router";
 import { INITIAL_FEN } from "chessops/fen";
-import { useAtom, useSetAtom, useStore } from "jotai";
+import { useStore } from "jotai";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { activeTabAtom, addRecentFileAtom, tabFamily, tabsAtom } from "@/state/atoms";
+import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
+import { addRecentFileAtom, tabFamily } from "@/state/atoms";
 import { headersToPGN } from "@/utils/chess";
 import { createFile } from "@/utils/files";
-import { createTab } from "@/utils/tabs";
 
 export default function CreateRepertoireModal({
   opened,
@@ -22,10 +22,8 @@ export default function CreateRepertoireModal({
   const [error, setError] = useState("");
   const { documentDir } = useLoaderData({ from: "/" });
 
-  const [, setTabs] = useAtom(tabsAtom);
-  const setActiveTab = useSetAtom(activeTabAtom);
+  const openInWorkspace = useOpenInWorkspace();
   const store = useStore();
-  const navigate = useNavigate();
 
   async function handleCreate() {
     const trimmedName = name.trim();
@@ -58,13 +56,11 @@ export default function CreateRepertoireModal({
     }
 
     const fileInfo = result.value;
-    const id = await createTab({
+    const id = await openInWorkspace({
       tab: {
         name: trimmedName,
         type: "analysis",
       },
-      setTabs,
-      setActiveTab,
       pgn,
       gameOrigin: {
         kind: "file",
@@ -79,7 +75,6 @@ export default function CreateRepertoireModal({
       path: fileInfo.path,
       type: "repertoire",
     });
-    navigate({ to: "/" });
 
     setName("");
     setColor("white");

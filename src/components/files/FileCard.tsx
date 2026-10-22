@@ -1,12 +1,9 @@
 import { ActionIcon, Badge, Box, Divider, Group, Stack, Text, Tooltip } from "@mantine/core";
 import { IconEdit, IconZoomCheck } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
-import { useAtom, useSetAtom } from "jotai";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
-import { openFile } from "@/utils/files";
+import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
 import { capitalize } from "@/utils/format";
 import { unwrap } from "@/utils/unwrap";
 import GamePreview from "../databases/GamePreview";
@@ -26,9 +23,7 @@ function FileCard({
 }) {
   const { t } = useTranslation();
 
-  const [, setTabs] = useAtom(tabsAtom);
-  const setActiveTab = useSetAtom(activeTabAtom);
-  const navigate = useNavigate();
+  const openInWorkspace = useOpenInWorkspace();
 
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -47,11 +42,11 @@ function FileCard({
   }, [selected, page]);
 
   async function openGame() {
-    await openFile(selected, setTabs, setActiveTab, {
+    await openInWorkspace({
+      file: selected,
       gameNumber: page,
       pgn: selectedGame || "",
     });
-    navigate({ to: "/" });
   }
 
   return (

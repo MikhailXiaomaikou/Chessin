@@ -5,6 +5,10 @@ import CommandPalette from "@/chessin/commands/CommandPalette";
 import { commandPaletteOpenAtom, keymapCheatSheetOpenAtom } from "@/chessin/commands/paletteAtom";
 import { runCommand } from "@/chessin/commands/registry";
 import { useJobRunner } from "@/chessin/jobs/useJobRunner";
+// Side-effect imports: register the review job handler and the startup sync
+// here so they do not depend on which route bundle happens to load first.
+import "@/chessin/review/jobHandler";
+import "@/chessin/sync/autoSync";
 import { typingGuardOptions } from "@/chessin/keymap/guard";
 import KeymapCheatSheet from "@/chessin/keymap/KeymapCheatSheet";
 import { getActiveTreeState } from "@/chessin/keymap/treeStores";

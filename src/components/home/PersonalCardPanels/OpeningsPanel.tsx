@@ -9,16 +9,13 @@ import {
 } from "@mantine/core";
 import { IconSearch } from "@tabler/icons-react";
 import { DataTable, type DataTableSortStatus } from "mantine-datatable";
-import { useNavigate } from "@tanstack/react-router";
 import type { Color } from "chessops";
-import { useAtom } from "jotai";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { PlayerGameInfo } from "@/bindings";
 import { commands, type GameOutcome } from "@/bindings";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
+import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
 import { parsePGN } from "@/utils/chess";
-import { createTab } from "@/utils/tabs";
 import { getTimeControl } from "@/utils/timeControl";
 import { countMainPly, defaultTree } from "@/utils/treeReducer";
 import { unwrap } from "@/utils/unwrap";
@@ -232,9 +229,7 @@ function OpeningsPanel({
 }
 
 function OpeningDetail({ opening, color }: { opening: OpeningStats; color: Color }) {
-  const [, setTabs] = useAtom(tabsAtom);
-  const [, setActiveTab] = useAtom(activeTabAtom);
-  const navigate = useNavigate();
+  const openInWorkspace = useOpenInWorkspace();
 
   return (
     <UnstyledButton
@@ -245,15 +240,12 @@ function OpeningDetail({ opening, color }: { opening: OpeningStats; color: Color
         const headers = defaultTree().headers;
         const tree = await parsePGN(pgn);
         headers.orientation = color;
-        await createTab({
+        await openInWorkspace({
           tab: { name: opening.name, type: "analysis" },
           pgn,
           headers,
-          setTabs,
-          setActiveTab,
           position: Array(countMainPly(tree.root)).fill(0),
         });
-        navigate({ to: "/" });
       }}
     >
       <Text size="sm" lineClamp={2}>

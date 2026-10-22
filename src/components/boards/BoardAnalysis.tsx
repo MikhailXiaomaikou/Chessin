@@ -4,6 +4,7 @@ import {
   IconDatabase,
   IconInfoCircle,
   IconNotes,
+  IconReportAnalytics,
   IconTargetArrow,
   IconZoomCheck,
 } from "@tabler/icons-react";
@@ -15,6 +16,7 @@ import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import ReviewPanel from "@/chessin/review/ReviewPanel";
 import { readOnlyHintShownAtom } from "@/chessin/save/hint";
 import { SaveDialog } from "@/chessin/save/SaveDialog";
 import { isLibraryOrigin, isReadOnlySource, shouldAutoSave } from "@/chessin/save/saveModel";
@@ -271,6 +273,9 @@ function BoardAnalysis() {
               <Tabs.Tab value="analysis" leftSection={<IconZoomCheck size="1rem" />}>
                 {t("Board.Tabs.Analysis")}
               </Tabs.Tab>
+              <Tabs.Tab value="review" leftSection={<IconReportAnalytics size="1rem" />}>
+                {t("Review.Tab")}
+              </Tabs.Tab>
               <Tabs.Tab value="database" leftSection={<IconDatabase size="1rem" />}>
                 {t("Board.Tabs.Database")}
               </Tabs.Tab>
@@ -297,6 +302,9 @@ function BoardAnalysis() {
             </Tabs.Panel>
             <Tabs.Panel value="analysis" flex={1} style={{ overflowY: "hidden" }}>
               <AnalysisPanel />
+            </Tabs.Panel>
+            <Tabs.Panel value="review" flex={1} style={{ overflowY: "hidden" }}>
+              <ReviewPanel />
             </Tabs.Panel>
           </Tabs>
         </Paper>

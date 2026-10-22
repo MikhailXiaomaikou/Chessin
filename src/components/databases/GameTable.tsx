@@ -14,18 +14,15 @@ import {
 import { DateInput } from "@mantine/dates";
 import { useHotkeys } from "@mantine/hooks";
 import { IconDotsVertical } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
 import dayjs from "dayjs";
-import { useAtom, useSetAtom } from "jotai";
 import { DataTable } from "mantine-datatable";
 import { useContext } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
 import { useStore } from "zustand";
 import type { GameSort, NormalizedGame, Outcome } from "@/bindings";
-import { activeTabAtom, tabsAtom } from "@/state/atoms";
+import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
 import { query_games } from "@/utils/db";
-import { createTab } from "@/utils/tabs";
 import { DatabaseViewStateContext } from "./DatabaseViewStateContext";
 import GameCard from "./GameCard";
 import GridLayout from "./GridLayout";
@@ -46,10 +43,7 @@ function GameTable() {
   const selectedGame = useStore(store, (s) => s.games.selectedGame);
   const setSelectedGame = useStore(store, (s) => s.setGamesSelectedGame);
 
-  const navigate = useNavigate();
-
-  const [, setTabs] = useAtom(tabsAtom);
-  const setActiveTab = useSetAtom(activeTabAtom);
+  const openInWorkspace = useOpenInWorkspace();
 
   const { data, error, isLoading, mutate } = useSWR(["games", file, query], () =>
     query_games(file, query),
@@ -211,13 +205,11 @@ function GameTable() {
           records={games}
           fetching={isLoading}
           onRowDoubleClick={({ record }) => {
-            createTab({
+            openInWorkspace({
               tab: {
                 name: `${record.white} - ${record.black}`,
                 type: "analysis",
               },
-              setTabs,
-              setActiveTab,
               pgn: record.moves,
               headers: record,
               gameOrigin: {
@@ -226,7 +218,6 @@ function GameTable() {
                 gameId: record.id,
               },
             });
-            navigate({ to: "/" });
           }}
           columns={[
             {

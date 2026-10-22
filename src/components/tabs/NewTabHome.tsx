@@ -42,6 +42,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { useTranslation } from "react-i18next";
 import { commands } from "@/bindings";
+import TodayCard from "@/chessin/notebook/TodayCard";
 import { openFirstRun } from "@/chessin/onboarding/firstRunState";
 import { getStats } from "@/components/files/opening";
 import Chessboard from "../icons/Chessboard";
@@ -264,6 +265,8 @@ export default function NewTabHome({ id }: { id: string }) {
       />
       <CreateRepertoireModal opened={openRepertoireModal} setOpened={setOpenRepertoireModal} />
       <Stack gap="lg" pt="sm">
+        {/* Chessin (S2-5): cards due today, games waiting for a review, latest review. */}
+        <TodayCard />
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
           {cards.map((card) => (
             <Card shadow="sm" p="lg" radius="md" withBorder key={card.title}>

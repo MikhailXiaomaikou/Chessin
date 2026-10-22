@@ -20,6 +20,18 @@ main window (see `src-tauri/capabilities/main.json`).
 - `allow-doc-delete`
 - `allow-doc-versions`
 - `allow-doc-restore-version`
+- `allow-job-upsert`
+- `allow-job-list`
+- `allow-job-delete`
+- `allow-job-prune`
+- `allow-eval-cache-get`
+- `allow-eval-cache-put`
+- `allow-card-upsert`
+- `allow-card-list`
+- `allow-card-get`
+- `allow-card-delete`
+- `allow-card-log`
+- `allow-card-stats`
 - `allow-move-to-trash`
 - `allow-scan-chessbase`
 
@@ -31,6 +43,162 @@ main window (see `src-tauri/capabilities/main.json`).
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`chessin:allow-card-delete`
+
+</td>
+<td>
+
+Enables the card_delete command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-card-delete`
+
+</td>
+<td>
+
+Denies the card_delete command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-card-get`
+
+</td>
+<td>
+
+Enables the card_get command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-card-get`
+
+</td>
+<td>
+
+Denies the card_get command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-card-list`
+
+</td>
+<td>
+
+Enables the card_list command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-card-list`
+
+</td>
+<td>
+
+Denies the card_list command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-card-log`
+
+</td>
+<td>
+
+Enables the card_log command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-card-log`
+
+</td>
+<td>
+
+Denies the card_log command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-card-stats`
+
+</td>
+<td>
+
+Enables the card_stats command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-card-stats`
+
+</td>
+<td>
+
+Denies the card_stats command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-card-upsert`
+
+</td>
+<td>
+
+Enables the card_upsert command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-card-upsert`
+
+</td>
+<td>
+
+Denies the card_upsert command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>
@@ -236,6 +404,162 @@ Enables the doc_versions command without any pre-configured scope.
 <td>
 
 Denies the doc_versions command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-eval-cache-get`
+
+</td>
+<td>
+
+Enables the eval_cache_get command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-eval-cache-get`
+
+</td>
+<td>
+
+Denies the eval_cache_get command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-eval-cache-put`
+
+</td>
+<td>
+
+Enables the eval_cache_put command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-eval-cache-put`
+
+</td>
+<td>
+
+Denies the eval_cache_put command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-job-delete`
+
+</td>
+<td>
+
+Enables the job_delete command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-job-delete`
+
+</td>
+<td>
+
+Denies the job_delete command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-job-list`
+
+</td>
+<td>
+
+Enables the job_list command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-job-list`
+
+</td>
+<td>
+
+Denies the job_list command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-job-prune`
+
+</td>
+<td>
+
+Enables the job_prune command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-job-prune`
+
+</td>
+<td>
+
+Denies the job_prune command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-job-upsert`
+
+</td>
+<td>
+
+Enables the job_upsert command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-job-upsert`
+
+</td>
+<td>
+
+Denies the job_upsert command without any pre-configured scope.
 
 </td>
 </tr>

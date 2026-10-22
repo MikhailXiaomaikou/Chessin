@@ -129,6 +129,150 @@ async docRestoreVersion(id: string, versionId: bigint) : Promise<Result<null, st
 }
 },
 /**
+ * Inserts or replaces a background job, every field included; the frontend's
+ * job runner writes each transition through this.
+ */
+async jobUpsert(job: JobRecord) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|job_upsert", { job }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The jobs with `status` (`queued`, `running`, `done`, `failed`, `cancelled`;
+ * every status when `None`): running first, then queued, then finished,
+ * newest first within each group. A job left `running` by a crash is
+ * `queued` again once the library is reopened.
+ */
+async jobList(status: string | null) : Promise<Result<JobRecord[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|job_list", { status }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes a job; a missing one is not an error.
+ */
+async jobDelete(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|job_delete", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Keeps the `keep_finished` most recently updated done/failed/cancelled jobs,
+ * deletes the other finished ones and returns how many were deleted.
+ */
+async jobPrune(keepFinished: number) : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|job_prune", { keepFinished }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The cached evaluations of `epds` by `engine` whose depth reaches
+ * `min_depth`, each position at most once, in no particular order.
+ */
+async evalCacheGet(epds: string[], engine: string, minDepth: number) : Promise<Result<CachedEval[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|eval_cache_get", { epds, engine, minDepth }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Caches evaluations; an entry only replaces the stored one of its
+ * (position, engine) when its depth is at least the stored depth.
+ */
+async evalCachePut(entries: CachedEval[]) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|eval_cache_put", { entries }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Inserts or replaces training cards, every field included; an existing
+ * card keeps its review log.
+ */
+async cardUpsert(cards: CardRecord[]) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|card_upsert", { cards }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Up to `limit` cards due at or before `due_before` (every card when `None`),
+ * soonest due first.
+ */
+async cardList(dueBefore: bigint | null, limit: number) : Promise<Result<CardRecord[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|card_list", { dueBefore, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The card; `None` when it does not exist.
+ */
+async cardGet(id: string) : Promise<Result<CardRecord | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|card_get", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes a card and its review log; a missing card is not an error.
+ */
+async cardDelete(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|card_delete", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Records a review of the card (`rating` 1–4 as in FSRS, `log` the ts-fsrs
+ * `ReviewLog` as JSON); the card must exist.
+ */
+async cardLog(cardId: string, reviewedAt: bigint, rating: number, log: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|card_log", { cardId, reviewedAt, rating, log }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Counts the cards as of `now` (Unix milliseconds): total, due (`due <= now`),
+ * new (never graded) and reviewed today (distinct cards graded during the UTC
+ * calendar day that contains `now`).
+ */
+async cardStats(now: bigint) : Promise<Result<CardStats, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|card_stats", { now }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Moves files and directories to the OS recycle bin, records each success in
  * the `trash` table and returns the paths that could not be moved.
  */
@@ -165,6 +309,97 @@ async scanChessbase(dirs: string[] | null) : Promise<Result<ChessBaseDb[], strin
 
 /** user-defined types **/
 
+/**
+ * One row of `eval_cache` (without `created_at`).
+ */
+export type CachedEval = { 
+/**
+ * The position as an EPD (FEN without the move counters).
+ */
+epd: string; 
+/**
+ * Engine name and version, as the frontend forms it.
+ */
+engine: string; depth: number; 
+/**
+ * `cp` or `mate`.
+ */
+score_type: string; 
+/**
+ * Centipawns, or moves to mate.
+ */
+score_value: number; 
+/**
+ * The best move, UCI.
+ */
+best_uci: string; 
+/**
+ * The principal variation: UCI moves separated by spaces.
+ */
+pv: string }
+/**
+ * One row of `cards`.
+ */
+export type CardRecord = { 
+/**
+ * `fm:<epd>` for a find-the-move card, `rp:<epd>` for a repertoire one.
+ */
+id: string; 
+/**
+ * The position as an EPD (FEN without the move counters).
+ */
+epd: string; 
+/**
+ * `find_move`, `repertoire`, …
+ */
+kind: string; 
+/**
+ * The accepted answer(s), as the frontend encodes them (a JSON array of
+ * UCI moves).
+ */
+answer: string; 
+/**
+ * JSON describing where the card came from (game, ply); `None` when
+ * unknown.
+ */
+source: string | null; 
+/**
+ * Unix milliseconds: when the card is due for review.
+ */
+due: bigint; 
+/**
+ * JSON of the ts-fsrs `Card`, opaque to the store.
+ */
+fsrs: string; 
+/**
+ * JSON (played move, player colour, explanation ids, …), opaque to the
+ * store.
+ */
+meta: string; 
+/**
+ * Unix milliseconds.
+ */
+created_at: bigint; 
+/**
+ * Unix milliseconds.
+ */
+updated_at: bigint }
+/**
+ * What [`Library::card_stats`] counts, as of a given `now`.
+ */
+export type CardStats = { total: number; 
+/**
+ * Cards with `due <= now`, new ones included.
+ */
+due: number; 
+/**
+ * Cards that were never graded (no `card_logs` row).
+ */
+new: number; 
+/**
+ * Distinct cards graded during the UTC calendar day that contains `now`.
+ */
+reviewed_today: number }
 /**
  * What [`convert_to_pgn`] did.
  */
@@ -235,6 +470,42 @@ updated_at: bigint }
  * [`Document`] without its payload, as listed by [`Library::doc_list`].
  */
 export type DocumentMeta = { id: string; kind: string; title: string; origin: string | null; 
+/**
+ * Unix milliseconds.
+ */
+updated_at: bigint }
+/**
+ * One row of `jobs`.
+ */
+export type JobRecord = { id: string; 
+/**
+ * `review`, `sync`, `import`, …; the runner dispatches on it.
+ */
+kind: string; title: string; 
+/**
+ * `queued`, `running`, `done`, `failed` or `cancelled`.
+ */
+status: string; 
+/**
+ * JSON, opaque to the store.
+ */
+payload: string; 
+/**
+ * `0.0` to `1.0`.
+ */
+progress: number; 
+/**
+ * JSON, set when `done`.
+ */
+result: string | null; 
+/**
+ * The message, set when `failed`.
+ */
+error: string | null; 
+/**
+ * Unix milliseconds.
+ */
+created_at: bigint; 
 /**
  * Unix milliseconds.
  */

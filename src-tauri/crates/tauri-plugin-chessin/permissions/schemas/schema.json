@@ -295,6 +295,78 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the card_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-card-delete",
+          "markdownDescription": "Enables the card_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the card_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-card-delete",
+          "markdownDescription": "Denies the card_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the card_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-card-get",
+          "markdownDescription": "Enables the card_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the card_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-card-get",
+          "markdownDescription": "Denies the card_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the card_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-card-list",
+          "markdownDescription": "Enables the card_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the card_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-card-list",
+          "markdownDescription": "Denies the card_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the card_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-card-log",
+          "markdownDescription": "Enables the card_log command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the card_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-card-log",
+          "markdownDescription": "Denies the card_log command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the card_stats command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-card-stats",
+          "markdownDescription": "Enables the card_stats command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the card_stats command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-card-stats",
+          "markdownDescription": "Denies the card_stats command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the card_upsert command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-card-upsert",
+          "markdownDescription": "Enables the card_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the card_upsert command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-card-upsert",
+          "markdownDescription": "Denies the card_upsert command without any pre-configured scope."
+        },
+        {
           "description": "Enables the cbh_to_pgn command without any pre-configured scope.",
           "type": "string",
           "const": "allow-cbh-to-pgn",
@@ -391,6 +463,78 @@
           "markdownDescription": "Denies the doc_versions command without any pre-configured scope."
         },
         {
+          "description": "Enables the eval_cache_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-eval-cache-get",
+          "markdownDescription": "Enables the eval_cache_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the eval_cache_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-eval-cache-get",
+          "markdownDescription": "Denies the eval_cache_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the eval_cache_put command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-eval-cache-put",
+          "markdownDescription": "Enables the eval_cache_put command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the eval_cache_put command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-eval-cache-put",
+          "markdownDescription": "Denies the eval_cache_put command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the job_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-job-delete",
+          "markdownDescription": "Enables the job_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the job_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-job-delete",
+          "markdownDescription": "Denies the job_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the job_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-job-list",
+          "markdownDescription": "Enables the job_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the job_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-job-list",
+          "markdownDescription": "Denies the job_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the job_prune command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-job-prune",
+          "markdownDescription": "Enables the job_prune command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the job_prune command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-job-prune",
+          "markdownDescription": "Denies the job_prune command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the job_upsert command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-job-upsert",
+          "markdownDescription": "Enables the job_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the job_upsert command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-job-upsert",
+          "markdownDescription": "Denies the job_upsert command without any pre-configured scope."
+        },
+        {
           "description": "Enables the move_to_trash command without any pre-configured scope.",
           "type": "string",
           "const": "allow-move-to-trash",
@@ -451,10 +595,10 @@
           "markdownDescription": "Denies the store_set command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-restore-version`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`",
+          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-restore-version`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-restore-version`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`"
+          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-restore-version`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`"
         }
       ]
     }

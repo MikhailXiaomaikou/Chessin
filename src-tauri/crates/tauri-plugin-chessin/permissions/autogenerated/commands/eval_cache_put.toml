@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-eval-cache-put"
+description = "Enables the eval_cache_put command without any pre-configured scope."
+commands.allow = ["eval_cache_put"]
+
+[[permission]]
+identifier = "deny-eval-cache-put"
+description = "Denies the eval_cache_put command without any pre-configured scope."
+commands.deny = ["eval_cache_put"]

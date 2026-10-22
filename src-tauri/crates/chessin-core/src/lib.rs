@@ -3,8 +3,9 @@
 //! Everything in this crate is independent of Tauri so that it can be reused by
 //! the data pipeline services (plan §3.3) and, where useful, contributed upstream.
 //! The modules planned in `docs/chessin-on-en-croissant-plan.md` §3.1 are `store`,
-//! `jobs`, `cache`, `review`, `explain`, `srs`, `names` and `query`; only `store`
-//! exists so far, as a placeholder.
+//! `jobs`, `cache`, `review`, `explain`, `srs`, `names` and `query`; so far only
+//! `store` exists, and it also holds the persisted side of the jobs, the engine
+//! evaluation cache and the training cards (`store::{jobs, eval_cache, cards}`).
 
 pub mod store;
 
