@@ -23,6 +23,135 @@ async cbhToPgn(cbhPath: string, outPgnPath: string) : Promise<Result<CbhImportRe
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Reads a key of the `kv` table (`workspace.tabs`, …); `None` when unset.
+ */
+async storeGet(key: string) : Promise<Result<string | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|store_get", { key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Writes a key of the `kv` table.
+ */
+async storeSet(key: string, value: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|store_set", { key, value }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Removes a key of the `kv` table; a missing key is not an error.
+ */
+async storeDelete(key: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|store_delete", { key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Inserts or replaces a document (`data` is JSON) and records a version: a
+ * new labelled one when `checkpoint` is given, otherwise a new one only when
+ * the latest version is a checkpoint or older than 5 minutes (else that
+ * version takes the new data). At most 50 versions are kept per document.
+ */
+async docPut(id: string, kind: string, title: string, origin: string | null, data: string, checkpoint: string | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|doc_put", { id, kind, title, origin, data, checkpoint }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The document with its payload; `None` when it does not exist.
+ */
+async docGet(id: string) : Promise<Result<Document | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|doc_get", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Documents of `kind` (every kind when `None`) without their payload, most
+ * recently updated first.
+ */
+async docList(kind: string | null) : Promise<Result<DocumentMeta[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|doc_list", { kind }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Deletes a document and its versions; a missing document is not an error.
+ */
+async docDelete(id: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|doc_delete", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The versions of a document, newest first.
+ */
+async docVersions(id: string) : Promise<Result<VersionMeta[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|doc_versions", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Makes `version_id` the document's current payload; the state before the
+ * restore stays in the history.
+ */
+async docRestoreVersion(id: string, versionId: bigint) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|doc_restore_version", { id, versionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Moves files and directories to the OS recycle bin, records each success in
+ * the `trash` table and returns the paths that could not be moved.
+ */
+async moveToTrash(paths: string[]) : Promise<Result<string[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|move_to_trash", { paths }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Lists the ChessBase databases (`.cbh`, `.2cbh`) under `dirs`, or under the
+ * usual `Documents/ChessBase` folders when `dirs` is `None`, searching up to
+ * three directory levels deep.
+ */
+async scanChessbase(dirs: string[] | null) : Promise<Result<ChessBaseDb[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|scan_chessbase", { dirs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -66,9 +195,66 @@ unsupported: UnsupportedAnnotation[];
  */
 encoding: string; warnings: string[] }
 /**
+ * One database found by [`scan_dirs`].
+ */
+export type ChessBaseDb = { 
+/**
+ * The header file (`.cbh` / `.2cbh`).
+ */
+path: string; 
+/**
+ * File name without the extension.
+ */
+name: string; 
+/**
+ * `cbh` or `2cbh`.
+ */
+format: string; 
+/**
+ * Records in the database (games, texts and deleted games); `None` for
+ * `2cbh` and for a `.cbh` file whose size is not a whole number of records.
+ */
+games: number | null; 
+/**
+ * Size of the header file plus its side-car files.
+ */
+size_bytes: bigint; 
+/**
+ * Unix seconds of the header file's last modification, when known.
+ */
+modified: bigint | null }
+/**
+ * A document with its JSON payload.
+ */
+export type Document = { id: string; kind: string; title: string; origin: string | null; data: string; 
+/**
+ * Unix milliseconds.
+ */
+updated_at: bigint }
+/**
+ * [`Document`] without its payload, as listed by [`Library::doc_list`].
+ */
+export type DocumentMeta = { id: string; kind: string; title: string; origin: string | null; 
+/**
+ * Unix milliseconds.
+ */
+updated_at: bigint }
+/**
  * One kind of annotation that was not translated, and how often it occurred.
  */
 export type UnsupportedAnnotation = { kind: string; count: number }
+/**
+ * One row of `document_versions` without its payload.
+ */
+export type VersionMeta = { id: bigint; doc_id: string; 
+/**
+ * Unix milliseconds.
+ */
+created_at: bigint; 
+/**
+ * The checkpoint label; `None` for an automatic version.
+ */
+label: string | null }
 
 /** tauri-specta globals **/
 

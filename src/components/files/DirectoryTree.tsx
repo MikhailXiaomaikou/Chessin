@@ -24,6 +24,7 @@ import {
   createContext,
   useContext,
 } from "react";
+import { useTrashActionLabel } from "@/chessin/trash/TrashNotice";
 import { activeTabAtom, deckAtomFamily, tabsAtom, expandedDirectoriesAtom } from "@/state/atoms";
 import { openFile } from "@/utils/files";
 import classes from "./DirectoryTree.module.css";
@@ -286,6 +287,8 @@ function DirectoryNode({
   const suppressClickRef = useRef(false);
   const dragStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const dragContext = useContext(DragContext);
+  // "移到回收站" when the build can use the OS recycle bin, "删除" otherwise.
+  const trashLabel = useTrashActionLabel();
 
   const [isDraggingNode, setIsDraggingNode] = useState(false);
 
@@ -457,7 +460,7 @@ function DirectoryNode({
             {
               key: "delete-file",
               icon: <IconTrash size={16} />,
-              title: "Delete",
+              title: trashLabel,
               color: "red",
               onClick: () => {
                 onRequestDelete(node);

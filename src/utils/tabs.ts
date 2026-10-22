@@ -53,6 +53,15 @@ const gameOriginSchema = z.discriminatedUnion("kind", [
         database: z.string(),
         gameId: z.number(),
     }),
+    /**
+     * Chessin-owned document in `library.sqlite` (S1b-2 persists it as
+     * `doc_put(id = docId, kind = "game")`). The only origin that is
+     * auto-saved; external files and databases are read-only sources.
+     */
+    z.object({
+        kind: z.literal("library"),
+        docId: z.string(),
+    }),
 ]);
 
 export const tabSchema = z.object({
@@ -147,6 +156,19 @@ export async function isInTempDir(filePath: string): Promise<boolean> {
     return normalize(filePath).startsWith(normalize(tmp));
 }
 
+/**
+ * Writes the tree of `store` back to the tab's source (PGN file or .db3 game),
+ * or asks for a new PGN path when there is no writable source yet.
+ *
+ * This is always an explicit action: Chessin never calls it from autosave
+ * (external files and databases are read-only sources, see
+ * `@/chessin/save/saveModel`). `setCurrentTab` receives the updated tab when a
+ * new file is chosen; pass an updater scoped to `tab` when the tab being saved
+ * is not the active one.
+ *
+ * Resolves to `true` when something was written, `false` when the user
+ * cancelled the file dialog or the origin cannot be written (`library`).
+ */
 export async function saveToFile({
     dir,
     tab,
@@ -159,9 +181,13 @@ export async function saveToFile({
     setCurrentTab: React.Dispatch<React.SetStateAction<Tab>>;
     store: StoreApi<TreeStoreState>;
     isUserSave?: boolean;
-}) {
+}): Promise<boolean> {
     let filePath: string;
     const currentOrigin = tab?.gameOrigin;
+    if (currentOrigin?.kind === "library") {
+        // Library documents are persisted by the workspace store; there is no file to write.
+        return false;
+    }
     const fileOrigin =
         currentOrigin?.kind === "file" || currentOrigin?.kind === "temp_file"
             ? currentOrigin
@@ -179,7 +205,7 @@ export async function saveToFile({
     if (databaseOrigin) {
         await commands.writeDbGame(databaseOrigin.database, databaseOrigin.gameId, pgn);
         store.getState().save();
-        return;
+        return true;
     }
 
     if (fileOrigin && !(isTempFile && isUserSave)) {
@@ -198,7 +224,7 @@ export async function saveToFile({
             ],
         });
         if (userChoice === null) {
-            return;
+            return false;
         }
         if (userChoice.endsWith(".pgn")) {
             filePath = userChoice;
@@ -237,4 +263,5 @@ export async function saveToFile({
     }
     await commands.writeGame(filePath, fileOrigin?.gameNumber ?? 0, pgn);
     store.getState().save();
+    return true;
 }

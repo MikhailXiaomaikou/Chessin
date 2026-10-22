@@ -92,3 +92,71 @@ jobs:
         working-directory: src-tauri
         continue-on-error: true
         run: cargo clippy --locked --all-targets -- -D warnings
+
+  # Chessin: WebDriver smoke tests (plan S1b-6). Builds the Chessin debug binary
+  # and drives it through tauri-driver + WebKitWebDriver under Xvfb (e2e/).
+  # Non-blocking for the first iteration; flip continue-on-error off once the
+  # job has proven stable on the hosted runners.
+  e2e:
+    name: E2E smoke (tauri-driver)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Same package set (and webkit pin) as the rust job, plus the WebDriver
+      # for that exact WebKit build and a virtual display.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-0=2.44.0-2 \
+            libwebkit2gtk-4.1-dev=2.44.0-2 \
+            libjavascriptcoregtk-4.1-0=2.44.0-2 \
+            libjavascriptcoregtk-4.1-dev=2.44.0-2 \
+            gir1.2-javascriptcoregtk-4.1=2.44.0-2 \
+            gir1.2-webkit2-4.1=2.44.0-2 \
+            webkit2gtk-driver=2.44.0-2 \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xvfb
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Sync node version and setup cache
+        uses: actions/setup-node@v3
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install app dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      # Caches ~/.cargo/bin too, so `cargo install tauri-driver` is a no-op on
+      # warm runs (the debug `target/` is shared with the rust job's cache key).
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      # Same command as documented in e2e/wdio.conf.ts; produces
+      # src-tauri/target/debug/en-croissant (runs the Vite build first).
+      - name: Build Chessin (debug, no bundle)
+        run: pnpm tauri build --debug --no-bundle --config src-tauri/tauri.chessin.conf.json
+
+      - name: Run smoke tests
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1600x1000x24" pnpm e2e

@@ -1,0 +1,22 @@
+{
+  // Standalone type-check for the WebdriverIO smoke tests (the app tsconfig only
+  // includes `src/**`). Run: `pnpm exec tsc -p e2e/tsconfig.json --noEmit`.
+  // The runner itself loads these files through tsx, so no emit is needed.
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    // `@wdio/cli` pulls in `@types/node` and `@types/mocha`, but pnpm keeps
+    // transitive packages out of the root `node_modules`; its hidden hoist
+    // directory is the documented place where they are still reachable.
+    "typeRoots": ["../node_modules/@types", "../node_modules/.pnpm/node_modules/@types"],
+    "types": ["node", "mocha"]
+  },
+  "include": ["./**/*.ts"]
+}

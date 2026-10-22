@@ -22,12 +22,12 @@ import {
   IconFolder,
 } from "@tabler/icons-react";
 import { useLoaderData } from "@tanstack/react-router";
-import { readDir, remove } from "@tauri-apps/plugin-fs";
+import { readDir } from "@tauri-apps/plugin-fs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
+import { type TrashItem, useTrash } from "@/chessin/trash/TrashNotice";
 import { capitalize } from "@/utils/format";
-import ConfirmModal from "../common/ConfirmModal";
 import OpenFolderButton from "../common/OpenFolderButton";
 import DirectoryTree from "./DirectoryTree";
 import { DragContext } from "./DirectoryTree";
@@ -60,6 +60,14 @@ function findEntryByPath(entries: Entry[], path: string): Entry | null {
   return null;
 }
 
+function toTrashItem(entry: Entry): TrashItem {
+  return {
+    kind: entry.type === "directory" ? "directory" : "file",
+    path: entry.path,
+    name: entry.name,
+  };
+}
+
 const useFileDirectory = (dir: string) => {
   const { data, error, isLoading, mutate } = useSWR<Entry[]>(["file-directory", dir], async () => {
     const entries = await readDir(dir);
@@ -86,10 +94,17 @@ function FilesPage() {
   const [games, setGames] = useState<Map<number, string>>(new Map());
   const [filter, setFilter] = useState<FileType | null>(null);
 
-  const [deleteModal, toggleDeleteModal] = useToggle();
   const [createModal, toggleCreateModal] = useToggle();
   const [createDirModal, toggleCreateDirModal] = useToggle();
   const [editModal, toggleEditModal] = useToggle();
+
+  // Deletions go to the OS recycle bin (Chessin S1b-4); the directory listing
+  // is refreshed afterwards and the selection effect below drops a selection
+  // whose path is gone.
+  const onTrashDone = useCallback(async () => {
+    await mutate();
+  }, [mutate]);
+  const { requestTrash, modal: trashModal, confirming } = useTrash(onTrashDone);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,8 +113,8 @@ function FilesPage() {
     [
       "Delete",
       () => {
-        if (selected && !deleteModal) {
-          toggleDeleteModal();
+        if (selected && !confirming) {
+          requestTrash([toTrashItem(selected)]);
         }
       },
     ],
@@ -185,31 +200,12 @@ function FilesPage() {
   const requestDelete = useCallback(
     (entry: Entry) => {
       setSelected(entry);
-      if (!deleteModal) {
-        toggleDeleteModal();
-      }
+      requestTrash([toTrashItem(entry)]);
     },
-    [deleteModal, toggleDeleteModal],
+    [requestTrash],
   );
 
   const refreshDirectory = useCallback(() => mutate(), [mutate]);
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (!selected) {
-      return;
-    }
-
-    if (selected.type === "directory") {
-      await remove(selected.path, { recursive: true });
-    } else {
-      await remove(selected.path);
-      await remove(selected.path.replace(".pgn", ".info")).catch(() => {});
-    }
-
-    await mutate();
-    toggleDeleteModal();
-    setSelected(null);
-  }, [selected, mutate, toggleDeleteModal]);
 
   const dragContextValue = useMemo(
     () => ({
@@ -252,6 +248,7 @@ function FilesPage() {
           metadata={selected as FileMetadata}
         />
       )}
+      {trashModal}
       <Group align="baseline" pl="lg" py="sm">
         <Title>{t("Files.Title")}</Title>
         <OpenFolderButton folder={documentDir} />
@@ -333,15 +330,6 @@ function FilesPage() {
 
         {selected ? (
           <>
-            <ConfirmModal
-              title={t("Files.Delete.Title")}
-              description={t("Files.Delete.Message", {
-                fileName: selected.name,
-              })}
-              opened={deleteModal}
-              onClose={toggleDeleteModal}
-              onConfirm={handleConfirmDelete}
-            />
             {selected.type === "file" ? (
               <Paper withBorder style={{ borderWidth: 2 }} pt="md" h="100%">
                 <FileCard

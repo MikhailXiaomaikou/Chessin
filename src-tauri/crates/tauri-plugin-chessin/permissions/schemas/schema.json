@@ -319,10 +319,142 @@
           "markdownDescription": "Denies the chessin_ping command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`",
+          "description": "Enables the doc_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-doc-delete",
+          "markdownDescription": "Enables the doc_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the doc_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-doc-delete",
+          "markdownDescription": "Denies the doc_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the doc_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-doc-get",
+          "markdownDescription": "Enables the doc_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the doc_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-doc-get",
+          "markdownDescription": "Denies the doc_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the doc_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-doc-list",
+          "markdownDescription": "Enables the doc_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the doc_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-doc-list",
+          "markdownDescription": "Denies the doc_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the doc_put command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-doc-put",
+          "markdownDescription": "Enables the doc_put command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the doc_put command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-doc-put",
+          "markdownDescription": "Denies the doc_put command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the doc_restore_version command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-doc-restore-version",
+          "markdownDescription": "Enables the doc_restore_version command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the doc_restore_version command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-doc-restore-version",
+          "markdownDescription": "Denies the doc_restore_version command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the doc_versions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-doc-versions",
+          "markdownDescription": "Enables the doc_versions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the doc_versions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-doc-versions",
+          "markdownDescription": "Denies the doc_versions command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the move_to_trash command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-move-to-trash",
+          "markdownDescription": "Enables the move_to_trash command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the move_to_trash command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-move-to-trash",
+          "markdownDescription": "Denies the move_to_trash command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the scan_chessbase command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-scan-chessbase",
+          "markdownDescription": "Enables the scan_chessbase command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the scan_chessbase command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-scan-chessbase",
+          "markdownDescription": "Denies the scan_chessbase command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the store_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-store-delete",
+          "markdownDescription": "Enables the store_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the store_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-store-delete",
+          "markdownDescription": "Denies the store_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the store_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-store-get",
+          "markdownDescription": "Enables the store_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the store_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-store-get",
+          "markdownDescription": "Denies the store_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the store_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-store-set",
+          "markdownDescription": "Enables the store_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the store_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-store-set",
+          "markdownDescription": "Denies the store_set command without any pre-configured scope."
+        },
+        {
+          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-restore-version`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`"
+          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-restore-version`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`"
         }
       ]
     }

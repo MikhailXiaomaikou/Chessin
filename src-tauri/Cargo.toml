@@ -94,3 +94,8 @@ tauri-plugin = "2"
 specta = { version = "^2.0.0-rc.20", features = ["derive"] }
 specta-typescript = "0.0.9"
 tauri-specta = { version = "^2.0.0-rc.20", features = ["derive", "typescript"] }
+# Same version and features as the app's own `rusqlite` above, so only one
+# `libsqlite3-sys` is linked into the binary.
+rusqlite = { version = "0.28", features = ["bundled"] }
+trash = "5"
+dirs = "6"

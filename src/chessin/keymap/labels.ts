@@ -94,6 +94,8 @@ export function keybindLabel(key: string, t: TFunction, fallback = key): string 
             return t("Keymap.TOGGLE_SIDEBAR");
         case "TOGGLE_TAB_BAR":
             return t("Keymap.TOGGLE_TAB_BAR");
+        case "REOPEN_TAB":
+            return t("Keymap.REOPEN_TAB");
         default:
             return fallback;
     }
@@ -115,6 +117,7 @@ export const KEYMAP_GROUPS: KeymapGroup[] = [
             "KEYBOARD_SHORTCUTS",
             "NEW_TAB",
             "CLOSE_TAB",
+            "REOPEN_TAB",
             "CYCLE_TABS",
             "REVERSE_CYCLE_TABS",
             "OPEN_FILE",

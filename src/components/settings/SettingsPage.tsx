@@ -26,10 +26,19 @@ import {
 } from "@tabler/icons-react";
 import { useLoaderData } from "@tanstack/react-router";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import { RESET } from "jotai/utils";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { keybindLabel } from "@/chessin/keymap/labels";
+import {
+  applyPreset,
+  countCustomised,
+  isKeymapPresetName,
+  KEYMAP_PRESET_NAMES,
+  keymapPresetAtom,
+  presetLabel,
+} from "@/chessin/keymap/presets";
 import {
   autoPromoteAtom,
   autoSaveAtom,
@@ -121,12 +130,42 @@ function SettingRow({
   );
 }
 
+/** "键位方案 / Keymap preset": rewrites the whole keymap, keeping non-colliding overrides. */
+function KeymapPresetSelect() {
+  const { t } = useTranslation();
+  const [keyMap, setKeyMap] = useAtom(keyMapAtom);
+  const [preset, setPreset] = useAtom(keymapPresetAtom);
+  const customised = countCustomised(keyMap, preset);
+
+  return (
+    <Stack gap={4} align="flex-end">
+      <Select
+        aria-label={t("Keymap.Preset.Label")}
+        allowDeselect={false}
+        data={KEYMAP_PRESET_NAMES.map((name) => ({ value: name, label: presetLabel(name, t) }))}
+        value={preset}
+        onChange={(value) => {
+          if (!isKeymapPresetName(value) || value === preset) return;
+          setKeyMap((prev) => applyPreset(value, prev, preset));
+          setPreset(value);
+        }}
+      />
+      {customised > 0 && (
+        <Text size="xs" c="dimmed">
+          {t("Keymap.Preset.Customized", { n: customised })}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
 export default function Page() {
   const { t, i18n } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [keyMap, setKeyMap] = useAtom(keyMapAtom);
+  const setKeymapPreset = useSetAtom(keymapPresetAtom);
   const [isNative, setIsNative] = useAtom(nativeBarAtom);
   const {
     dirs: {
@@ -495,6 +534,24 @@ export default function Page() {
             onChange={(val) => setPracticeAutoDifficulty(val as "none" | "1" | "2" | "3" | "4")}
           />
         ),
+      },
+      // Keybinds settings (the per-key table is rendered by the panel itself)
+      {
+        id: "keymap-preset",
+        category: "keybinds",
+        title: t("Keymap.Preset.Label"),
+        description: t("Keymap.Preset.Desc"),
+        keywords: [
+          "keymap",
+          "preset",
+          "shortcuts",
+          "chessbase",
+          "lichess",
+          "键位",
+          "方案",
+          "快捷键",
+        ],
+        render: () => <KeymapPresetSelect />,
       },
       // Sound settings
       {
@@ -865,7 +922,13 @@ export default function Page() {
                       {t("Settings.Keybinds")}
                     </Text>
                     <Tooltip label={t("Common.Reset")}>
-                      <ActionIcon onClick={() => setKeyMap(RESET)}>
+                      <ActionIcon
+                        aria-label={t("Common.Reset")}
+                        onClick={() => {
+                          setKeyMap(RESET);
+                          setKeymapPreset("chessin");
+                        }}
+                      >
                         <IconReload size="1rem" />
                       </ActionIcon>
                     </Tooltip>
@@ -873,6 +936,7 @@ export default function Page() {
                   <Text size="xs" c="dimmed" mt={3} mb="lg">
                     {t("Settings.Keybinds.Desc")}
                   </Text>
+                  {renderCategorySettings("keybinds")}
                   <Table>
                     <Table.Thead>
                       <Table.Tr>
@@ -883,8 +947,8 @@ export default function Page() {
                     <Table.Tbody>
                       {Object.entries(keyMap).map(([action, keybind]) => {
                         return (
-                          <Table.Tr key={keybind.name}>
-                            <Table.Td>{keybind.name}</Table.Td>
+                          <Table.Tr key={action}>
+                            <Table.Td>{keybindLabel(action, t, keybind.name)}</Table.Td>
                             <Table.Td>
                               <KeybindInput action={action} keybind={keybind} />
                             </Table.Td>

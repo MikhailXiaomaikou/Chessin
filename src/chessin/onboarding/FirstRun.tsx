@@ -1,5 +1,7 @@
 import {
+  Badge,
   Button,
+  Checkbox,
   Container,
   Group,
   Modal,
@@ -15,6 +17,7 @@ import {
   IconAlertCircle,
   IconCircleCheck,
   IconCpu,
+  IconDatabaseSearch,
   IconFileUpload,
   IconLoader2,
   IconWorld,
@@ -35,6 +38,7 @@ import {
   sessionsAtom,
   tabsAtom,
 } from "@/state/atoms";
+import { formatBytes } from "@/utils/format";
 import { createTab } from "@/utils/tabs";
 import classes from "./FirstRun.module.css";
 import {
@@ -47,11 +51,14 @@ import {
   type AccountKind,
   addAccount,
   CbhUnavailableError,
+  type ChessBaseDb,
   classifyImportFile,
   getNewestGame,
   importAccountGames,
   type ImportedDatabase,
   importLocalFile,
+  isImportableChessBaseDb,
+  scanChessBaseDatabases,
 } from "./importers";
 
 /**
@@ -80,8 +87,28 @@ type FileRow = {
   error?: string;
 };
 
+/** The "find ChessBase databases" step; it only runs on an explicit click. */
+type ScanState =
+  | { phase: "idle" }
+  | { phase: "scanning" }
+  | { phase: "unavailable" }
+  | { phase: "done"; results: ChessBaseDb[] }
+  | { phase: "error"; error: string };
+
 const IDLE: AccountStatus = { phase: "idle" };
+const SCAN_IDLE: ScanState = { phase: "idle" };
 const IMPORT_EXTENSIONS = ["pgn", "pgn.zst", "pgn.bz2", "cbh"];
+
+/** `modified` comes as unix seconds; tolerate milliseconds from a future binding. */
+function formatModified(modified: number | null, locale: string): string | null {
+  if (modified === null || !Number.isFinite(modified) || modified <= 0) return null;
+  const ms = modified > 1e12 ? modified : modified * 1000;
+  try {
+    return new Date(ms).toLocaleDateString(locale);
+  } catch {
+    return new Date(ms).toLocaleDateString();
+  }
+}
 
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -195,6 +222,8 @@ export default function FirstRun() {
   const chesscomDownload = useProgress(jobIds.chesscom);
 
   const [files, setFiles] = useState<FileRow[]>([]);
+  const [scan, setScan] = useState<ScanState>(SCAN_IDLE);
+  const [scanSelected, setScanSelected] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const [importedDbs, setImportedDbs] = useState<ImportedDatabase[]>([]);
   const [busy, setBusy] = useState(0);
@@ -283,6 +312,90 @@ export default function FirstRun() {
     },
     [enqueue, setConversionState, t],
   );
+
+  // --- ChessBase scan step -------------------------------------------------
+
+  const scanResults = scan.phase === "done" ? scan.results : [];
+  const scanPaths = new Set(scanResults.map((db) => db.path));
+  const fileRowByPath = new Map(files.map((row) => [row.path, row]));
+  // The files list keeps the rows that were not picked from the scan list.
+  const looseFiles = files.filter((row) => !scanPaths.has(row.path));
+
+  /** A scan entry is still selectable while nothing has been started for it. */
+  function scanRowSelectable(db: ChessBaseDb): boolean {
+    if (!isImportableChessBaseDb(db)) return false;
+    const row = fileRowByPath.get(db.path);
+    return row === undefined || row.phase === "error";
+  }
+
+  const selectableScanPaths = scanResults.filter(scanRowSelectable).map((db) => db.path);
+  const scanSelection = scanSelected.filter((path) => selectableScanPaths.includes(path));
+
+  async function runScan() {
+    setScan({ phase: "scanning" });
+    try {
+      const results = await scanChessBaseDatabases();
+      if (results === null) {
+        setScan({ phase: "unavailable" });
+        return;
+      }
+      setScan({ phase: "done", results });
+      // Preselect everything importable, like the teardown's "☑ Mega Database 2026" mock-up.
+      setScanSelected(
+        results
+          .filter((db) => isImportableChessBaseDb(db) && fileRowByPath.get(db.path) === undefined)
+          .map((db) => db.path),
+      );
+    } catch (e) {
+      warn(`first run: ChessBase scan failed: ${errorMessage(e)}`);
+      setScan({ phase: "error", error: errorMessage(e) });
+    }
+  }
+
+  function toggleScanRow(path: string, checked: boolean) {
+    setScanSelected((prev) =>
+      checked ? (prev.includes(path) ? prev : [...prev, path]) : prev.filter((p) => p !== path),
+    );
+  }
+
+  function importScanSelection() {
+    const paths = scanResults
+      .map((db) => db.path)
+      .filter((path) => scanSelection.includes(path) && selectableScanPaths.includes(path));
+    if (paths.length === 0) return;
+    setScanSelected([]);
+    // Same sequential queue (and the same `importCbhFile` path) as dropped files.
+    importFiles(paths);
+  }
+
+  function scanStatusText(): string | null {
+    switch (scan.phase) {
+      case "idle":
+        return null;
+      case "scanning":
+        return t("FirstRun.Scan.Scanning");
+      case "unavailable":
+        return t("FirstRun.Scan.Unavailable");
+      case "error":
+        return t("FirstRun.Scan.Failed", { error: scan.error });
+      case "done":
+        return scan.results.length === 0
+          ? t("FirstRun.Scan.None")
+          : t("FirstRun.Scan.Found", { n: scan.results.length });
+    }
+  }
+
+  function scanRowDetails(db: ChessBaseDb): string {
+    const parts = [
+      db.games === null
+        ? t("FirstRun.Scan.GamesUnknown")
+        : t("FirstRun.Scan.Games", { n: db.games.toLocaleString(i18n.language) }),
+      db.size_bytes > 0 ? formatBytes(db.size_bytes, 1) : null,
+    ];
+    const modified = formatModified(db.modified, i18n.language);
+    if (modified) parts.push(t("FirstRun.Scan.Modified", { date: modified }));
+    return parts.filter((p): p is string => !!p).join(" · ");
+  }
 
   async function pickFiles() {
     const selected = await open({
@@ -489,9 +602,9 @@ export default function FirstRun() {
                 </Text>
               </Stack>
             </UnstyledButton>
-            {files.length > 0 && (
+            {looseFiles.length > 0 && (
               <Stack gap={4} mt="sm" role="status" aria-live="polite">
-                {files.map((row) => (
+                {looseFiles.map((row) => (
                   <Group key={row.path} gap={6} wrap="nowrap">
                     <StatusIcon phase={row.phase} />
                     <Text size="sm" c={row.phase === "error" ? "red" : "dimmed"} truncate>
@@ -499,6 +612,122 @@ export default function FirstRun() {
                     </Text>
                   </Group>
                 ))}
+              </Stack>
+            )}
+          </Paper>
+
+          <Paper withBorder radius="md" p="md" component="section">
+            <Group gap="xs" mb={4}>
+              <IconDatabaseSearch size="1.25rem" />
+              <Title order={3} size="h4">
+                {t("FirstRun.Scan.Title")}
+              </Title>
+            </Group>
+            <Text size="sm" c="dimmed" mb="md">
+              {t("FirstRun.Scan.Desc")}
+            </Text>
+            <Group gap="sm" wrap="wrap">
+              <Button
+                variant={scan.phase === "done" ? "default" : "light"}
+                leftSection={<IconDatabaseSearch size="1rem" />}
+                onClick={() => void runScan()}
+                loading={scan.phase === "scanning"}
+                disabled={starting || scan.phase === "unavailable"}
+              >
+                {scan.phase === "done" ? t("FirstRun.Scan.Rescan") : t("FirstRun.Scan.Button")}
+              </Button>
+              {scan.phase === "done" && selectableScanPaths.length > 0 && (
+                <>
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    onClick={() => setScanSelected(selectableScanPaths)}
+                    disabled={scanSelection.length === selectableScanPaths.length}
+                  >
+                    {t("FirstRun.Scan.SelectAll")}
+                  </Button>
+                  <Button
+                    onClick={importScanSelection}
+                    disabled={starting || scanSelection.length === 0}
+                  >
+                    {t("FirstRun.Scan.Import", { n: scanSelection.length })}
+                  </Button>
+                </>
+              )}
+            </Group>
+            <Group gap={6} mt={4} mih="1.25rem" wrap="nowrap">
+              <StatusIcon
+                phase={
+                  scan.phase === "scanning" ? "queued" : scan.phase === "error" ? "error" : "idle"
+                }
+              />
+              <Text
+                size="sm"
+                c={scan.phase === "error" || scan.phase === "unavailable" ? "red" : "dimmed"}
+                role="status"
+              >
+                {scanStatusText()}
+              </Text>
+            </Group>
+            {scanResults.length > 0 && (
+              <Stack gap="xs" mt="sm">
+                {scanResults.map((db) => {
+                  const importable = isImportableChessBaseDb(db);
+                  const row = fileRowByPath.get(db.path);
+                  const selectable = scanRowSelectable(db);
+                  return (
+                    <Group key={db.path} align="flex-start" wrap="nowrap" gap="sm">
+                      <Checkbox
+                        checked={scanSelection.includes(db.path)}
+                        disabled={!selectable || starting}
+                        onChange={(e) => toggleScanRow(db.path, e.currentTarget.checked)}
+                        label={
+                          <Group gap={6} wrap="nowrap">
+                            <Text fw={500} truncate>
+                              {db.name}
+                            </Text>
+                            <Badge
+                              size="xs"
+                              variant="light"
+                              color={importable ? "blue" : "gray"}
+                              style={{ flexShrink: 0 }}
+                            >
+                              {db.format.toUpperCase()}
+                            </Badge>
+                          </Group>
+                        }
+                        description={
+                          <>
+                            <Text size="xs" c="dimmed" component="span">
+                              {scanRowDetails(db)}
+                            </Text>
+                            {!importable && (
+                              <Text size="xs" c="dimmed" fs="italic">
+                                {db.format === "2cbh"
+                                  ? t("FirstRun.Scan.NotYet2cbh")
+                                  : t("FirstRun.Files.Unsupported")}
+                              </Text>
+                            )}
+                            {row && (
+                              <Group gap={6} wrap="nowrap" mt={2}>
+                                <StatusIcon phase={row.phase} />
+                                <Text
+                                  size="xs"
+                                  c={row.phase === "error" ? "red" : "dimmed"}
+                                  truncate
+                                  role="status"
+                                >
+                                  {fileStatusText(row)}
+                                </Text>
+                              </Group>
+                            )}
+                          </>
+                        }
+                        style={{ flex: 1, minWidth: 0 }}
+                      />
+                    </Group>
+                  );
+                })}
               </Stack>
             )}
           </Paper>

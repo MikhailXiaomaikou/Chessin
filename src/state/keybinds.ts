@@ -2,7 +2,8 @@ import { platform } from "@tauri-apps/plugin-os";
 import { atomWithStorage } from "jotai/utils";
 import type { SyncStorage, SyncStringStorage } from "jotai/vanilla/utils/atomWithStorage";
 
-const meta = platform() === "macos" ? "cmd" : "ctrl";
+/** `cmd` on macOS, `ctrl` elsewhere — the primary modifier of every `mod+…` default. */
+export const meta = platform() === "macos" ? "cmd" : "ctrl";
 
 export type Keybind = {
     name: string;
@@ -11,6 +12,10 @@ export type Keybind = {
 
 export type KeyMap = { [key: string]: Keybind };
 
+/**
+ * Chessin defaults (the `chessin` preset in `@/chessin/keymap/presets`).
+ * The other presets are expressed as overrides of this map.
+ */
 const keys: KeyMap = {
     NEW_TAB: { name: "New tab", keys: `${meta}+t` },
     CLOSE_TAB: { name: "Close tab", keys: `${meta}+w` },
@@ -62,7 +67,12 @@ const keys: KeyMap = {
     TOGGLE_SIDEBAR: { name: "Toggle Sidebar", keys: `${meta}+shift+b` },
     // Chessin: moved off `mod+shift+t` (reserved for "reopen tab"); `mod+shift+b` is the sidebar.
     TOGGLE_TAB_BAR: { name: "Toggle Tab Bar", keys: `${meta}+shift+h` },
+    // Chessin: browser-style "reopen the last closed tab" (command `view.reopenClosedTab`).
+    REOPEN_TAB: { name: "Reopen closed tab", keys: `${meta}+shift+t` },
 };
+
+/** The built-in defaults, frozen so presets and tests cannot mutate them. */
+export const defaultKeyMap: Readonly<KeyMap> = keys;
 
 // Chessin: defaults that changed since the keymap was first persisted. A stored
 // binding that still equals an old default is migrated to the new default so

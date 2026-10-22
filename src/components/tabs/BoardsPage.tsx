@@ -1,13 +1,16 @@
 import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
 import { ActionIcon, ScrollArea, Tabs } from "@mantine/core";
-import { useHotkeys, useToggle } from "@mantine/hooks";
+import { useHotkeys } from "@mantine/hooks";
 import { IconPlus } from "@tabler/icons-react";
 import { useAtom, useAtomValue } from "jotai";
-import { type ReactNode, startTransition, useCallback, useEffect } from "react";
+import { type ReactNode, startTransition, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Mosaic, type MosaicNode } from "react-mosaic-component";
 import { match } from "ts-pattern";
 import { commands } from "@/bindings";
+import { isLibraryOrigin, retargetTabToLibrary } from "@/chessin/save/saveModel";
+import { isTabDirty } from "@/chessin/save/tabTreeState";
+import { pushRecentlyClosed } from "@/chessin/store/recentlyClosed";
 import { activeTabAtom, showTabBarAtom, tabsAtom } from "@/state/atoms";
 import { keyMapAtom } from "@/state/keybinds";
 import { createTab, genID, isPersistentGameOrigin, type Tab } from "@/utils/tabs";
@@ -32,7 +35,10 @@ export default function BoardsPage() {
 
   const [tabs, setTabs] = useAtom(tabsAtom);
   const [activeTab, setActiveTab] = useAtom(activeTabAtom);
-  const [saveModalOpened, toggleSaveModal] = useToggle();
+  // The tab whose close is waiting on the "unsaved changes" prompt. Captured
+  // by id so the prompt saves/closes that tab even when it is not active.
+  const [closingTabId, setClosingTabId] = useState<string | null>(null);
+  const closingTab = closingTabId ? tabs.find((tab) => tab.value === closingTabId) : undefined;
 
   useEffect(() => {
     if (tabs.length === 0) {
@@ -48,10 +54,14 @@ export default function BoardsPage() {
     async (value: string | null, forced?: boolean) => {
       if (value !== null) {
         const closedTab = tabs.find((tab) => tab.value === value);
-        const tabState = JSON.parse(sessionStorage.getItem(value) || "{}");
-        if (tabState && isPersistentGameOrigin(closedTab) && tabState.state.dirty && !forced) {
-          toggleSaveModal();
+        if (!forced && isPersistentGameOrigin(closedTab) && isTabDirty(value)) {
+          setClosingTabId(value);
           return;
+        }
+        setClosingTabId((prev) => (prev === value ? null : prev));
+        if (closedTab && closedTab.type !== "new") {
+          // Chessin: keep a snapshot so the tab can be reopened (mod+shift+t).
+          pushRecentlyClosed(closedTab);
         }
         if (value === activeTab) {
           const index = tabs.findIndex((tab) => tab.value === value);
@@ -70,7 +80,7 @@ export default function BoardsPage() {
         await commands.abortGame(`${value}-game`);
       }
     },
-    [tabs, activeTab, setTabs, toggleSaveModal, setActiveTab],
+    [tabs, activeTab, setTabs, setActiveTab],
   );
 
   function selectTab(index: number) {
@@ -117,14 +127,16 @@ export default function BoardsPage() {
       }
 
       if (tab) {
+        const copy: Tab = {
+          name: tab.name,
+          value: id,
+          type: tab.type,
+          gameOrigin: tab.gameOrigin,
+        };
         setTabs((prev) => [
           ...prev,
-          {
-            name: tab.name,
-            value: id,
-            type: tab.type,
-            gameOrigin: tab.gameOrigin,
-          },
+          // A library document is keyed by its tab id: the duplicate gets its own.
+          isLibraryOrigin(copy) ? retargetTabToLibrary(copy, id) : copy,
         ]);
         startTransition(() => setActiveTab(id));
       }
@@ -258,15 +270,17 @@ export default function BoardsPage() {
       )}
       {tabs.map((tab) => (
         <Tabs.Panel key={tab.value} value={tab.value} h="100%" w="100%" pb="sm" px="xs">
-          <TabSwitch
-            tab={tab}
-            saveModalOpened={saveModalOpened}
-            toggleSaveModal={toggleSaveModal}
-            closeTab={closeTab}
-            activeTab={activeTab}
-          />
+          <TabSwitch tab={tab} />
         </Tabs.Panel>
       ))}
+      <ConfirmChangesModal
+        tab={closingTab}
+        onCancel={() => setClosingTabId(null)}
+        onCloseTab={(tab) => {
+          setClosingTabId(null);
+          closeTab(tab.value, true);
+        }}
+      />
     </Tabs>
   );
 }
@@ -295,19 +309,7 @@ const windowsStateAtom = atomWithStorage<WindowsState>("windowsState", {
   },
 });
 
-function TabSwitch({
-  tab,
-  saveModalOpened,
-  toggleSaveModal,
-  closeTab,
-  activeTab,
-}: {
-  tab: Tab;
-  saveModalOpened: boolean;
-  toggleSaveModal: () => void;
-  closeTab: (value: string | null, forced?: boolean) => void;
-  activeTab: string | null;
-}) {
+function TabSwitch({ tab }: { tab: Tab }) {
   const [windowsState, setWindowsState] = useAtom(windowsStateAtom);
 
   return match(tab.type)
@@ -332,11 +334,6 @@ function TabSwitch({
           resize={{ minimumPaneSizePercentage: 0 }}
         />
         <BoardAnalysis />
-        <ConfirmChangesModal
-          opened={saveModalOpened}
-          toggle={toggleSaveModal}
-          closeTab={() => closeTab(activeTab, true)}
-        />
       </TreeStateProvider>
     ))
     .with("puzzles", () => (

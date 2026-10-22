@@ -3,6 +3,7 @@ import { getDefaultStore, useSetAtom } from "jotai";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { getActiveTreeState, getActiveTreeStore } from "@/chessin/keymap/treeStores";
+import { recentlyClosedAtom, reopenLastClosedTab } from "@/chessin/store/recentlyClosed";
 import { allEnabledAtom, enableAllAtom } from "@/state/atoms";
 import { keymapCheatSheetOpenAtom } from "./paletteAtom";
 import { type Command, registerCommands } from "./registry";
@@ -111,6 +112,23 @@ export function useGlobalCommands(): void {
           const store = getDefaultStore();
           store.set(enableAllAtom, !store.get(allEnabledAtom));
         },
+      },
+      {
+        // Hotkey (`REOPEN_TAB`, mod+shift+t) is bound in ChessinMounts.
+        id: "view.reopenClosedTab",
+        section: "view",
+        title: () => t("Keymap.REOPEN_TAB", { defaultValue: "Reopen closed tab" }),
+        shortcutKey: "REOPEN_TAB",
+        aliases: [
+          "reopen tab",
+          "reopen closed tab",
+          "recently closed",
+          "重新打开",
+          "恢复标签页",
+          "最近关闭",
+        ],
+        enabled: () => getDefaultStore().get(recentlyClosedAtom).length > 0,
+        run: () => void reopenLastClosedTab(),
       },
       {
         id: "help.keyboardShortcuts",

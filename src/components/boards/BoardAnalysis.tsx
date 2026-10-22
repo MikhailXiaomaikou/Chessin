@@ -7,6 +7,7 @@ import {
   IconTargetArrow,
   IconZoomCheck,
 } from "@tabler/icons-react";
+import { notifications } from "@mantine/notifications";
 import { useLoaderData } from "@tanstack/react-router";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import type { Piece } from "chessops";
@@ -14,6 +15,10 @@ import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import { readOnlyHintShownAtom } from "@/chessin/save/hint";
+import { SaveDialog } from "@/chessin/save/SaveDialog";
+import { isLibraryOrigin, isReadOnlySource, shouldAutoSave } from "@/chessin/save/saveModel";
+import { createCheckpoint } from "@/chessin/store/libraryStore";
 import {
   allEnabledAtom,
   autoSaveAtom,
@@ -49,7 +54,6 @@ function BoardAnalysis() {
   const [selectedPiece, setSelectedPiece] = useState<Piece | null>(null);
   const [currentTab, setCurrentTab] = useAtom(currentTabAtom);
   const tabFile = getTabFile(currentTab);
-  const hasPersistentOrigin = currentTab?.gameOrigin.kind !== "none";
   const autoSave = useAtomValue(autoSaveAtom);
   const { documentDir } = useLoaderData({ from: "/" });
   const boardRef = useRef(null);
@@ -62,28 +66,70 @@ function BoardAnalysis() {
   const clearShapes = useStore(store, (s) => s.clearShapes);
   const setAnnotation = useStore(store, (s) => s.setAnnotation);
 
-  const saveFile = useCallback(async () => {
-    saveToFile({
-      dir: documentDir,
-      setCurrentTab,
-      tab: currentTab,
-      store,
-    });
-  }, [setCurrentTab, currentTab, documentDir, store]);
+  // Chessin save model (see @/chessin/save/saveModel):
+  // - external files / .db3 games are read-only sources: never auto-written;
+  // - library documents are the only autosaved origin (the workspace store
+  //   persists them ≤ 500 ms after each change); Ctrl/Cmd+S = checkpoint;
+  // - scratch tabs keep the old "save as PGN" behaviour.
+  const readOnlySource = isReadOnlySource(currentTab);
+  const libraryDoc = isLibraryOrigin(currentTab);
+  const [saveDialogOpened, setSaveDialogOpened] = useState(false);
+  const [readOnlyHintShown, setReadOnlyHintShown] = useAtom(readOnlyHintShownAtom);
+  const keyMap = useAtomValue(keyMapAtom);
+
   const userSaveFile = useCallback(async () => {
-    saveToFile({
+    if (!currentTab) return;
+    if (readOnlySource) {
+      setSaveDialogOpened(true);
+      return;
+    }
+    if (libraryDoc) {
+      try {
+        await createCheckpoint(currentTab.value);
+        store.getState().save();
+        notifications.show({
+          id: "chessin-save",
+          message: t("Save.CheckpointCreated"),
+          autoClose: 2000,
+        });
+      } catch (error) {
+        notifications.show({
+          id: "chessin-save",
+          color: "red",
+          title: t("Common.Error"),
+          message: t("Save.Failed", { error: String(error) }),
+        });
+      }
+      return;
+    }
+    await saveToFile({
       dir: documentDir,
       setCurrentTab,
       tab: currentTab,
       store,
       isUserSave: true,
     });
-  }, [setCurrentTab, currentTab, documentDir, store]);
+  }, [setCurrentTab, currentTab, documentDir, store, readOnlySource, libraryDoc, t]);
+
+  // Autosave: only library documents. Their content is written by the
+  // workspace store; here we only acknowledge that nothing is pending.
   useEffect(() => {
-    if (hasPersistentOrigin && autoSave && dirty) {
-      saveFile();
+    if (dirty && shouldAutoSave(currentTab, autoSave)) {
+      store.getState().save();
     }
-  }, [hasPersistentOrigin, saveFile, autoSave, dirty]);
+  }, [currentTab, autoSave, dirty, store]);
+
+  // One-time hint on the first edit of a read-only source.
+  useEffect(() => {
+    if (!dirty || !readOnlySource || readOnlyHintShown) return;
+    setReadOnlyHintShown(true);
+    notifications.show({
+      id: "chessin-readonly-source",
+      title: t("Save.ReadOnlySource.Title"),
+      message: t("Save.ReadOnlySource", { key: keyMap.SAVE_FILE.keys }),
+      autoClose: 10000,
+    });
+  }, [dirty, readOnlySource, readOnlyHintShown, setReadOnlyHintShown, t, keyMap.SAVE_FILE.keys]);
 
   const addGame = useCallback(() => {
     if (!tabFile) return;
@@ -111,8 +157,6 @@ function BoardAnalysis() {
 
   const [, enable] = useAtom(enableAllAtom);
   const allEnabled = useAtomValue(allEnabledAtom);
-
-  const keyMap = useAtomValue(keyMapAtom);
 
   const [, setAnalysisTab] = useAtom(currentAnalysisTabAtom);
   const [currentTabSelected, setCurrentTabSelected] = useAtom(currentTabSelectedAtom);
@@ -172,6 +216,14 @@ function BoardAnalysis() {
   return (
     <>
       <EvalListener />
+      <SaveDialog
+        opened={saveDialogOpened}
+        onClose={() => setSaveDialogOpened(false)}
+        tab={currentTab}
+        store={store}
+        setTab={setCurrentTab}
+        documentDir={documentDir}
+      />
       <Portal target="#left" style={{ height: "100%" }}>
         <Board
           practicing={practicing}

@@ -17,7 +17,7 @@ import { createElement, type FunctionComponent, type ReactNode } from "react";
 import { createStore, type StateCreator } from "zustand";
 import { persist } from "zustand/middleware";
 import type { BestMoves, Outcome, Score } from "@/bindings";
-import { createDebouncedSessionStorage } from "./debouncedStorage";
+import { createDocumentStorage } from "@/chessin/store/treePersist";
 import { ANNOTATION_INFO, type Annotation } from "@/utils/annotation";
 import { getPGN } from "@/utils/chess";
 import { parseSanOrUci, positionFromFen } from "@/utils/chessops";
@@ -628,7 +628,9 @@ export const createTreeStore = (id?: string, initialTree?: TreeState) => {
         return createStore<TreeStoreState>()(
             persist(stateCreator, {
                 name: id,
-                storage: createDebouncedSessionStorage<PersistedTreeState>(),
+                // Chessin: sessionStorage mirror + `doc_put(id, "game")` in library.sqlite
+                // (≤ 500 ms after the last change); see `@/chessin/store/treePersist`.
+                storage: createDocumentStorage<PersistedTreeState>(),
                 // History lives in the closure above and is never persisted;
                 // the flags derived from it must not survive a reload either.
                 partialize: (state) => {

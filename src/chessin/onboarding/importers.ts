@@ -2,6 +2,7 @@ import { basename, resolve } from "@tauri-apps/api/path";
 import { info } from "@tauri-apps/plugin-log";
 import type { DatabaseInfo, NormalizedGame } from "@/bindings";
 import { commands, events } from "@/bindings";
+import { commands as chessinCommands } from "@/chessin/bindings";
 import type { DatabaseConversionState } from "@/state/atoms";
 import { downloadChessCom, getChessComAccount } from "@/utils/chess.com/api";
 import { getDatabases, query_games } from "@/utils/db";
@@ -306,6 +307,84 @@ export async function importLocalFile(
 
     const games = findDatabase(await getDatabases(), dbPath)?.game_count ?? null;
     return { dbPath, title, games };
+}
+
+// ---------------------------------------------------------------------------
+// ChessBase scan ("查找本机的 ChessBase 数据库"; plugin command `scan_chessbase`)
+// ---------------------------------------------------------------------------
+
+/** One database found by `scan_chessbase` (mirrors the Rust `ChessBaseDb`). */
+export type ChessBaseDb = {
+    path: string;
+    name: string;
+    /** `cbh` (CB v1, importable) or `2cbh` (CB'26, not importable yet). */
+    format: "cbh" | "2cbh" | (string & {});
+    games: number | null;
+    size_bytes: number;
+    /** Unix timestamp of the last modification, when known. */
+    modified: number | null;
+};
+
+type ScanCommand = (dirs: string[] | null) => Promise<unknown>;
+
+/**
+ * `scan_chessbase` lands with the library-store plugin work; older builds (and
+ * stale bindings) simply do not have it. Looked up at call time so the import
+ * above stays a plain static one.
+ */
+function getScanCommand(): ScanCommand | null {
+    const scan = (chessinCommands as Record<string, unknown>).scanChessbase;
+    return typeof scan === "function" ? (scan as ScanCommand) : null;
+}
+
+/** True when this build can look for ChessBase databases. */
+export function isChessBaseScanAvailable(): boolean {
+    return getScanCommand() !== null;
+}
+
+function isChessBaseDb(value: unknown): value is ChessBaseDb {
+    if (!value || typeof value !== "object") return false;
+    const v = value as Record<string, unknown>;
+    return typeof v.path === "string" && typeof v.name === "string" && typeof v.format === "string";
+}
+
+function normaliseScanResult(raw: unknown): ChessBaseDb[] {
+    // tauri-specta wraps `Result<_, String>` commands as `{ status, data | error }`.
+    let list = raw;
+    if (raw && typeof raw === "object" && "status" in raw) {
+        const result = raw as { status: string; data?: unknown; error?: unknown };
+        if (result.status === "error") throw new Error(String(result.error ?? "scan failed"));
+        list = result.data;
+    }
+    if (!Array.isArray(list)) return [];
+    return list.filter(isChessBaseDb).map((db) => ({
+        path: db.path,
+        name: db.name,
+        format: db.format.toLowerCase(),
+        games: typeof db.games === "number" ? db.games : null,
+        size_bytes: typeof db.size_bytes === "number" ? db.size_bytes : Number(db.size_bytes ?? 0),
+        modified: typeof db.modified === "number" ? db.modified : null,
+    }));
+}
+
+/**
+ * Looks for ChessBase databases in the default locations (Documents/ChessBase…).
+ * Never called automatically: the first-run screen only runs it on an explicit
+ * click. Resolves to `null` when the command is missing from this build.
+ */
+export async function scanChessBaseDatabases(): Promise<ChessBaseDb[] | null> {
+    const scan = getScanCommand();
+    if (!scan) return null;
+    const found = normaliseScanResult(await scan(null));
+    return found.sort((a, b) => {
+        if (a.format !== b.format) return a.format === "cbh" ? -1 : 1;
+        return a.name.localeCompare(b.name);
+    });
+}
+
+/** Only CBH v1 databases go through `importLocalFile` → `importCbhFile`. */
+export function isImportableChessBaseDb(db: ChessBaseDb): boolean {
+    return db.format === "cbh" && classifyImportFile(db.path) === "cbh";
 }
 
 /** Most recent game (by date) of a database, or null when it is empty. */

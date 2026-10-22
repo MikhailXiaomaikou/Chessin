@@ -11,4 +11,18 @@ main window (see `src-tauri/capabilities/main.json`).
 
 """
 
-permissions = ["allow-chessin-ping", "allow-cbh-to-pgn"]
+permissions = [
+    "allow-chessin-ping",
+    "allow-cbh-to-pgn",
+    "allow-store-get",
+    "allow-store-set",
+    "allow-store-delete",
+    "allow-doc-put",
+    "allow-doc-get",
+    "allow-doc-list",
+    "allow-doc-delete",
+    "allow-doc-versions",
+    "allow-doc-restore-version",
+    "allow-move-to-trash",
+    "allow-scan-chessbase",
+]

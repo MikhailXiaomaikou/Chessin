@@ -2,6 +2,7 @@ import { ActionIcon, Stack, Tooltip } from "@mantine/core";
 import {
   IconArrowBack,
   IconCamera,
+  IconClockBolt,
   IconDeviceFloppy,
   IconEdit,
   IconEditOff,
@@ -19,6 +20,7 @@ import { memo, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { useBoardOrientation } from "@/chessin/board/orientationAtom";
+import { isLibraryOrigin, isReadOnlySource, shouldAutoSave } from "@/chessin/save/saveModel";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import {
   autoSaveAtom,
@@ -59,8 +61,19 @@ function BoardControls({
   const keyMap = useAtomValue(keyMapAtom);
   const [currentTab, setCurrentTab] = useAtom(currentTabAtom);
   const setGameState = useSetAtom(currentGameStateAtom);
-  const autoSave = useAtomValue(autoSaveAtom);
+  const [autoSave, setAutoSave] = useAtom(autoSaveAtom);
   const eraseDrawablesOnClick = useAtomValue(eraseDrawablesOnClickAtom);
+
+  // Chessin: autosave only ever writes library documents. External files and
+  // databases are read-only sources; the toggle explains that instead of
+  // silently doing nothing.
+  const autoSaveActive = shouldAutoSave(currentTab, autoSave);
+  const autoSaveTooltip = isLibraryOrigin(currentTab)
+    ? `${t(autoSave ? "Save.AutoSave.On" : "Save.AutoSave.Off")} · ${t("Save.AutoSave.Library")}`
+    : `${t(autoSave ? "Save.AutoSave.On" : "Save.AutoSave.Off")} · ${t(
+        isReadOnlySource(currentTab) ? "Save.AutoSave.ReadOnly" : "Save.AutoSave.Scratch",
+        { key: keyMap.SAVE_FILE.keys },
+      )}`;
 
   // Chessin: orientation is view state, never written to the PGN headers.
   const [orientation, toggleOrientation] = useBoardOrientation(
@@ -160,9 +173,22 @@ function BoardControls({
         <Tooltip position="right" label={t("Board.Action.SavePGN", { key: keyMap.SAVE_FILE.keys })}>
           <ActionIcon
             onClick={() => saveFile()}
-            variant={dirty && !autoSave ? "default" : "transparent"}
+            variant={dirty && !autoSaveActive ? "default" : "transparent"}
           >
             <IconDeviceFloppy size="1.2rem" />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      {saveFile && (
+        <Tooltip position="right" multiline w={260} label={autoSaveTooltip}>
+          <ActionIcon
+            onClick={() => setAutoSave((v) => !v)}
+            variant={autoSaveActive ? "light" : "transparent"}
+            c={autoSave && !autoSaveActive ? "dimmed" : undefined}
+            aria-label={t("Save.AutoSave")}
+            aria-pressed={autoSave}
+          >
+            <IconClockBolt size="1.2rem" />
           </ActionIcon>
         </Tooltip>
       )}

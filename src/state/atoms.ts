@@ -51,6 +51,11 @@ const zodArray = <Input, Output>(itemSchema: z.ZodType<Output, z.ZodTypeDef, Inp
 };
 
 // Tabs
+//
+// Chessin: sessionStorage is only the transient mirror of these two atoms. The
+// durable copy lives in library.sqlite (`workspace.tabs` / `workspace.activeTab`,
+// 300 ms debounce) and is restored before `BoardsPage` renders — see
+// `@/chessin/store/workspace` and `WorkspaceGate`.
 
 const firstTab: Tab = {
     name: "Tab.NewTab",

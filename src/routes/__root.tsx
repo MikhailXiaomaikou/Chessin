@@ -22,6 +22,8 @@ import { DOCS_URL } from "@/chessin/config";
 import ChessinMounts from "@/chessin/shell/ChessinMounts";
 import { isFirstRunOpen } from "@/chessin/onboarding/firstRunState";
 import { StatusBar } from "@/chessin/shell/StatusBar";
+import ClearDataDialog from "@/chessin/store/ClearDataDialog";
+import { markCleanExit } from "@/chessin/store/workspace";
 import AboutModal from "@/components/About";
 import { SideBar } from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
@@ -166,17 +168,12 @@ function RootLayout() {
     setShowTabBar((prev) => !prev);
   }, [setShowTabBar]);
 
+  // Chessin: scoped dialog (settings / layout & tabs / training / logins) that
+  // backs up localStorage first and never touches library documents.
+  const [clearDataOpened, setClearDataOpened] = useState(false);
   const clearSavedData = useCallback(() => {
-    ask(t("Menu.Help.ClearSavedData.Confirm"), {
-      title: t("Menu.Help.ClearSavedData.Title"),
-    }).then((res) => {
-      if (res) {
-        localStorage.clear();
-        sessionStorage.clear();
-        location.reload();
-      }
-    });
-  }, [t]);
+    setClearDataOpened(true);
+  }, []);
 
   const openLogs = useCallback(async () => {
     const path = await resolve(await appLogDir(), "en-croissant.log");
@@ -403,7 +400,9 @@ function RootLayout() {
                 {
                   label: t("Menu.File.Exit"),
                   id: "exit",
-                  action: () => exit(0),
+                  // Chessin: flush the workspace and mark a clean exit first,
+                  // otherwise the next launch reports a crash recovery.
+                  action: () => markCleanExit().finally(() => exit(0)),
                 },
               ]
             : []),
@@ -544,6 +543,7 @@ function RootLayout() {
       }}
     >
       <AboutModal opened={opened} setOpened={setOpened} />
+      <ClearDataDialog opened={clearDataOpened} onClose={() => setClearDataOpened(false)} />
       <ChessinMounts />
       {!isNative &&
         (import.meta.env.VITE_PLATFORM === "win32" ||

@@ -72,3 +72,50 @@ export function createDebouncedSessionStorage<S>(delay = DEBOUNCE_MS): PersistSt
         },
     };
 }
+
+// Chessin: the sessionStorage entry written above is the *transient mirror* of a
+// tab's tree store (the durable copy lives in library.sqlite, see
+// `@/chessin/store/treePersist`). The helpers below give that mirror a name so
+// crash recovery, "reopen closed tab" and checkpoints can read and seed it
+// without knowing about the pending-write queue.
+
+/** Serialised `StorageValue` of the tree store persisted under `name`, or null. */
+export function readSessionMirror(name: string): string | null {
+    const pending = pendingWrites.get(name);
+    if (pending) {
+        return JSON.stringify(pending);
+    }
+    try {
+        return sessionStorage.getItem(name);
+    } catch {
+        return null;
+    }
+}
+
+/** Replaces the mirror for `name` (and drops any pending debounced write for it). */
+export function writeSessionMirror(name: string, raw: string): void {
+    pendingWrites.delete(name);
+    try {
+        sessionStorage.setItem(name, raw);
+    } catch {
+        // Quota or disabled storage: the durable copy still exists in the library.
+    }
+}
+
+export function removeSessionMirror(name: string): void {
+    pendingWrites.delete(name);
+    try {
+        sessionStorage.removeItem(name);
+    } catch {
+        // ignore
+    }
+}
+
+/** Writes every pending mirror update now (used before the window closes). */
+export function flushSessionMirror(): void {
+    if (flushTimeout) {
+        clearTimeout(flushTimeout);
+        flushTimeout = null;
+    }
+    flush();
+}

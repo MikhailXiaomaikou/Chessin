@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-scan-chessbase"
+description = "Enables the scan_chessbase command without any pre-configured scope."
+commands.allow = ["scan_chessbase"]
+
+[[permission]]
+identifier = "deny-scan-chessbase"
+description = "Denies the scan_chessbase command without any pre-configured scope."
+commands.deny = ["scan_chessbase"]

@@ -27,18 +27,18 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { basename } from "@tauri-apps/api/path";
 import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
 import { useAtom } from "jotai";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
 import type { DatabaseInfo } from "@/bindings";
 import { commands } from "@/bindings";
 import { DEFAULT_SOURCE, defaultSourceAtom, localSource } from "@/chessin/sources/sources";
+import { type TrashResult, useTrash, useTrashActionLabel } from "@/chessin/trash/TrashNotice";
 import { databaseConversionStateAtom, storedDatabasesDirAtom } from "@/state/atoms";
 import { useActiveDatabaseViewStore } from "@/state/store/database";
 import { getDatabases, type SuccessDatabaseInfo } from "@/utils/db";
 import { formatBytes, formatNumber } from "@/utils/format";
 import { unwrap } from "@/utils/unwrap";
-import ConfirmModal from "../common/ConfirmModal";
 import GenericCard from "../common/GenericCard";
 import OpenFolderButton from "../common/OpenFolderButton";
 import AddDatabase from "./AddDatabase";
@@ -93,7 +93,25 @@ export default function DatabasesPage() {
 
   const isDefaultSource = defaultLocalPath !== null && defaultLocalPath === selectedDatabase?.file;
 
-  const [deleteModal, toggleDeleteModal] = useToggle();
+  // Deleting a database moves the .db3 and its -wal/-shm/.ecsi side files to
+  // the OS recycle bin (Chessin S1b-4), then refreshes the "databases" list.
+  // A database that was the default source falls back to the built-in default
+  // only once it is actually gone.
+  const onTrashDone = useCallback(
+    async (result: TrashResult) => {
+      if (
+        defaultLocalPath !== null &&
+        result.moved.some((item) => item.path === defaultLocalPath)
+      ) {
+        setDefaultSource(DEFAULT_SOURCE);
+      }
+      await mutate();
+      setSelected(null);
+    },
+    [defaultLocalPath, setDefaultSource, mutate],
+  );
+  const { requestTrash, modal: trashModal, busy: trashBusy } = useTrash(onTrashDone);
+  const trashLabel = useTrashActionLabel();
   const [exportLoading, setExportLoading] = useState(false);
 
   // Toggling the default on a database that already is the default falls back
@@ -120,23 +138,7 @@ export default function DatabasesPage() {
 
   return (
     <Stack h="100%">
-      <ConfirmModal
-        title={t("Databases.Delete.Title")}
-        description={t("Databases.Delete.Message")}
-        opened={deleteModal}
-        onClose={toggleDeleteModal}
-        onConfirm={() => {
-          if (!selectedDatabase) return;
-          if (selectedDatabase.file === defaultLocalPath) {
-            setDefaultSource(DEFAULT_SOURCE);
-          }
-          commands.deleteDatabase(selectedDatabase.file).then(() => {
-            mutate();
-            setSelected(null);
-          });
-          toggleDeleteModal();
-        }}
-      />
+      {trashModal}
 
       <AddDatabase
         databases={databases ?? []}
@@ -474,8 +476,23 @@ export default function DatabasesPage() {
                       </Button>
                     </Group>
                   )}
-                  <Button onClick={() => toggleDeleteModal()} color="red">
-                    {t("Common.Delete")}
+                  <Button
+                    color="red"
+                    loading={trashBusy}
+                    onClick={() =>
+                      requestTrash([
+                        {
+                          kind: "database",
+                          path: selectedDatabase.file,
+                          name:
+                            selectedDatabase.type === "success"
+                              ? selectedDatabase.title
+                              : selectedDatabase.filename,
+                        },
+                      ])
+                    }
+                  >
+                    {trashLabel}
                   </Button>
                 </Group>
               </Stack>

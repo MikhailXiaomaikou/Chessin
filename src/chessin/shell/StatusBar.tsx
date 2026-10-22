@@ -5,8 +5,10 @@ import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { registerCommand } from "@/chessin/commands/registry";
+import { TaskCentreChip } from "@/chessin/jobs/TaskCentre";
 import { useAppVersion } from "@/chessin/shell/diagnostics";
 import { offlineModeAtom } from "@/chessin/shell/offlineAtom";
+import { saveStateAtom } from "@/chessin/store/saveState";
 import { enginesAtom } from "@/state/atoms";
 import type { Engine } from "@/utils/engines";
 
@@ -27,8 +29,9 @@ export function countEnabledEngines(engines: readonly Engine[] | undefined): num
 /**
  * 24px status bar at the bottom of the app shell.
  *
- * left:   save state (placeholder until the docstore lands)
- * centre: compute chip "本地 · N 引擎" (+ an offline chip when offline)
+ * left:   save state of the Chessin-owned documents (`saveStateAtom`)
+ * centre: task-centre chip "后台任务 N" (S2-2, hidden when idle), compute chip
+ *         "本地 · N 引擎" (+ an offline chip when offline)
  * right:  offline switch bound to `offlineModeAtom`, app version
  *
  * Also registers the `status.toggleOffline` command for the palette.
@@ -39,6 +42,13 @@ export function StatusBar() {
   const [offline, setOffline] = useAtom(offlineModeAtom);
   const version = useAppVersion();
   const engineCount = countEnabledEngines(engines);
+  const saveState = useAtomValue(saveStateAtom);
+  const saveLabel =
+    saveState === "saving"
+      ? t("Workspace.SaveState.Saving")
+      : saveState === "unsaved"
+        ? t("Workspace.SaveState.Unsaved")
+        : t("Workspace.SaveState.Saved");
 
   useEffect(() => {
     return registerCommand({
@@ -70,14 +80,22 @@ export function StatusBar() {
         userSelect: "none",
       }}
     >
-      <Group gap={4} wrap="nowrap" data-slot="save-state">
+      <Group
+        gap={4}
+        wrap="nowrap"
+        data-slot="save-state"
+        data-state={saveState}
+        aria-live="polite"
+        c={saveState === "saved" ? "dimmed" : saveState === "saving" ? "blue" : "yellow"}
+      >
         <IconDeviceFloppy size={12} aria-hidden="true" />
-        <Text size="xs" c="dimmed" lh={1} span>
-          {t("StatusBar.Saved")}
+        <Text size="xs" c="inherit" lh={1} span>
+          {saveLabel}
         </Text>
       </Group>
 
       <Group gap={6} wrap="nowrap" justify="center">
+        <TaskCentreChip />
         <Tooltip label={t("StatusBar.Compute.Hint")} openDelay={400}>
           <Badge
             variant="light"
