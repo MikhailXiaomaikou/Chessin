@@ -44,6 +44,10 @@ main window (see `src-tauri/capabilities/main.json`).
 - `allow-index-position`
 - `allow-index-pawn-candidates`
 - `allow-index-games`
+- `allow-book-lookup`
+- `allow-book-info`
+- `allow-tablebase-probe`
+- `allow-tablebase-status`
 
 ## Permission Table
 
@@ -76,6 +80,58 @@ Enables the backup_library command without any pre-configured scope.
 <td>
 
 Denies the backup_library command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-book-info`
+
+</td>
+<td>
+
+Enables the book_info command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-book-info`
+
+</td>
+<td>
+
+Denies the book_info command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-book-lookup`
+
+</td>
+<td>
+
+Enables the book_lookup command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-book-lookup`
+
+</td>
+<td>
+
+Denies the book_lookup command without any pre-configured scope.
 
 </td>
 </tr>
@@ -934,6 +990,58 @@ Enables the store_set command without any pre-configured scope.
 <td>
 
 Denies the store_set command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-tablebase-probe`
+
+</td>
+<td>
+
+Enables the tablebase_probe command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-tablebase-probe`
+
+</td>
+<td>
+
+Denies the tablebase_probe command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-tablebase-status`
+
+</td>
+<td>
+
+Enables the tablebase_status command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-tablebase-status`
+
+</td>
+<td>
+
+Denies the tablebase_status command without any pre-configured scope.
 
 </td>
 </tr>

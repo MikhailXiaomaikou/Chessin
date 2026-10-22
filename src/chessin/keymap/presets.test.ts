@@ -61,12 +61,12 @@ describe("keymap presets", () => {
     it("applyPreset rewrites the map and keeps non-colliding user overrides", () => {
         const current = withKeys(presetKeyMap("chessin"), {
             NEW_TAB: "ctrl+n", // user override, free in the ChessBase preset → kept
-            SWAP_ORIENTATION: "r", // user override on an action the preset rebinds → kept
+            SWAP_ORIENTATION: "y", // user override on an action the preset rebinds → kept (`r` is REVEAL since S4-6)
             DELETE_MOVE: "alt+f2", // user override colliding with the preset's engine toggle → dropped
         });
         const next = applyPreset("chessbase", current, "chessin");
         expect(next.NEW_TAB.keys).toBe("ctrl+n");
-        expect(next.SWAP_ORIENTATION.keys).toBe("r");
+        expect(next.SWAP_ORIENTATION.keys).toBe("y");
         expect(next.DELETE_MOVE.keys).toBe(defaultKeyMap.DELETE_MOVE.keys);
         expect(next.TOGGLE_ALL_ENGINES.keys).toBe("alt+f2");
         expect(next.NEXT_GAME.keys).toBe("alt+arrowdown");

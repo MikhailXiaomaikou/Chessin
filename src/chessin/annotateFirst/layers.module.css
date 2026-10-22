@@ -1,0 +1,53 @@
+/* Comment layer colours for the 先自己注释 panel's own notation view (S4-6).
+   The upstream notation is not touched: Comment.tsx has no prefix hook, so
+   there the prefix text itself marks the layer. */
+
+.segment {
+  display: block;
+}
+
+.prefix {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.mine {
+  color: var(--mantine-color-blue-6);
+}
+
+.coach {
+  color: var(--mantine-color-green-7);
+}
+
+.engine {
+  color: var(--mantine-color-gray-6);
+}
+
+.plain {
+  color: inherit;
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.swatchMine {
+  background: var(--mantine-color-blue-6);
+}
+
+.swatchCoach {
+  background: var(--mantine-color-green-7);
+}
+
+.swatchEngine {
+  background: var(--mantine-color-gray-6);
+}
+
+.swatchPlain {
+  background: var(--mantine-color-dimmed);
+}

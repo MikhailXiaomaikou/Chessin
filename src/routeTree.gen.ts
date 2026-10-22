@@ -11,8 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as RepertoireRouteImport } from './routes/repertoire'
+import { Route as PrepRouteImport } from './routes/prep'
 import { Route as NotebookRouteImport } from './routes/notebook'
 import { Route as FilesRouteImport } from './routes/files'
+import { Route as EventsRouteImport } from './routes/events'
 import { Route as EnginesRouteImport } from './routes/engines'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as IndexRouteImport } from './routes/index'
@@ -29,6 +31,11 @@ const RepertoireRoute = RepertoireRouteImport.update({
   path: '/repertoire',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrepRoute = PrepRouteImport.update({
+  id: '/prep',
+  path: '/prep',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NotebookRoute = NotebookRouteImport.update({
   id: '/notebook',
   path: '/notebook',
@@ -37,6 +44,11 @@ const NotebookRoute = NotebookRouteImport.update({
 const FilesRoute = FilesRouteImport.update({
   id: '/files',
   path: '/files',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsRoute = EventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EnginesRoute = EnginesRouteImport.update({
@@ -69,8 +81,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
   '/engines': typeof EnginesRoute
+  '/events': typeof EventsRoute
   '/files': typeof FilesRoute
   '/notebook': typeof NotebookRoute
+  '/prep': typeof PrepRoute
   '/repertoire': typeof RepertoireRoute
   '/settings': typeof SettingsRoute
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
@@ -80,8 +94,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
   '/engines': typeof EnginesRoute
+  '/events': typeof EventsRoute
   '/files': typeof FilesRoute
   '/notebook': typeof NotebookRoute
+  '/prep': typeof PrepRoute
   '/repertoire': typeof RepertoireRoute
   '/settings': typeof SettingsRoute
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
@@ -92,8 +108,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/accounts': typeof AccountsRoute
   '/engines': typeof EnginesRoute
+  '/events': typeof EventsRoute
   '/files': typeof FilesRoute
   '/notebook': typeof NotebookRoute
+  '/prep': typeof PrepRoute
   '/repertoire': typeof RepertoireRoute
   '/settings': typeof SettingsRoute
   '/databases/$databaseId': typeof DatabasesDatabaseIdRoute
@@ -105,8 +123,10 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/engines'
+    | '/events'
     | '/files'
     | '/notebook'
+    | '/prep'
     | '/repertoire'
     | '/settings'
     | '/databases/$databaseId'
@@ -116,8 +136,10 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/engines'
+    | '/events'
     | '/files'
     | '/notebook'
+    | '/prep'
     | '/repertoire'
     | '/settings'
     | '/databases/$databaseId'
@@ -127,8 +149,10 @@ export interface FileRouteTypes {
     | '/'
     | '/accounts'
     | '/engines'
+    | '/events'
     | '/files'
     | '/notebook'
+    | '/prep'
     | '/repertoire'
     | '/settings'
     | '/databases/$databaseId'
@@ -139,8 +163,10 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountsRoute: typeof AccountsRoute
   EnginesRoute: typeof EnginesRoute
+  EventsRoute: typeof EventsRoute
   FilesRoute: typeof FilesRoute
   NotebookRoute: typeof NotebookRoute
+  PrepRoute: typeof PrepRoute
   RepertoireRoute: typeof RepertoireRoute
   SettingsRoute: typeof SettingsRoute
   DatabasesDatabaseIdRoute: typeof DatabasesDatabaseIdRoute
@@ -163,6 +189,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RepertoireRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/prep': {
+      id: '/prep'
+      path: '/prep'
+      fullPath: '/prep'
+      preLoaderRoute: typeof PrepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/notebook': {
       id: '/notebook'
       path: '/notebook'
@@ -175,6 +208,13 @@ declare module '@tanstack/react-router' {
       path: '/files'
       fullPath: '/files'
       preLoaderRoute: typeof FilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events': {
+      id: '/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof EventsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/engines': {
@@ -219,8 +259,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountsRoute: AccountsRoute,
   EnginesRoute: EnginesRoute,
+  EventsRoute: EventsRoute,
   FilesRoute: FilesRoute,
   NotebookRoute: NotebookRoute,
+  PrepRoute: PrepRoute,
   RepertoireRoute: RepertoireRoute,
   SettingsRoute: SettingsRoute,
   DatabasesDatabaseIdRoute: DatabasesDatabaseIdRoute,

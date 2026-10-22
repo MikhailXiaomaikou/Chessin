@@ -307,6 +307,30 @@
           "markdownDescription": "Denies the backup_library command without any pre-configured scope."
         },
         {
+          "description": "Enables the book_info command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-book-info",
+          "markdownDescription": "Enables the book_info command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the book_info command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-book-info",
+          "markdownDescription": "Denies the book_info command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the book_lookup command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-book-lookup",
+          "markdownDescription": "Enables the book_lookup command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the book_lookup command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-book-lookup",
+          "markdownDescription": "Denies the book_lookup command without any pre-configured scope."
+        },
+        {
           "description": "Enables the card_delete command without any pre-configured scope.",
           "type": "string",
           "const": "allow-card-delete",
@@ -703,6 +727,30 @@
           "markdownDescription": "Denies the store_set command without any pre-configured scope."
         },
         {
+          "description": "Enables the tablebase_probe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-tablebase-probe",
+          "markdownDescription": "Enables the tablebase_probe command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the tablebase_probe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-tablebase-probe",
+          "markdownDescription": "Denies the tablebase_probe command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the tablebase_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-tablebase-status",
+          "markdownDescription": "Enables the tablebase_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the tablebase_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-tablebase-status",
+          "markdownDescription": "Denies the tablebase_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the twocbh_to_pgn command without any pre-configured scope.",
           "type": "string",
           "const": "allow-twocbh-to-pgn",
@@ -715,10 +763,10 @@
           "markdownDescription": "Denies the twocbh_to_pgn command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-cbh-detect-format`\n- `allow-twocbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-version-get`\n- `allow-doc-restore-version`\n- `allow-backup-library`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`\n- `allow-index-build`\n- `allow-index-status`\n- `allow-index-delete`\n- `allow-index-position`\n- `allow-index-pawn-candidates`\n- `allow-index-games`",
+          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-cbh-detect-format`\n- `allow-twocbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-version-get`\n- `allow-doc-restore-version`\n- `allow-backup-library`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`\n- `allow-index-build`\n- `allow-index-status`\n- `allow-index-delete`\n- `allow-index-position`\n- `allow-index-pawn-candidates`\n- `allow-index-games`\n- `allow-book-lookup`\n- `allow-book-info`\n- `allow-tablebase-probe`\n- `allow-tablebase-status`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-cbh-detect-format`\n- `allow-twocbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-version-get`\n- `allow-doc-restore-version`\n- `allow-backup-library`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`\n- `allow-index-build`\n- `allow-index-status`\n- `allow-index-delete`\n- `allow-index-position`\n- `allow-index-pawn-candidates`\n- `allow-index-games`"
+          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-cbh-detect-format`\n- `allow-twocbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-version-get`\n- `allow-doc-restore-version`\n- `allow-backup-library`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`\n- `allow-index-build`\n- `allow-index-status`\n- `allow-index-delete`\n- `allow-index-position`\n- `allow-index-pawn-candidates`\n- `allow-index-games`\n- `allow-book-lookup`\n- `allow-book-info`\n- `allow-tablebase-probe`\n- `allow-tablebase-status`"
         }
       ]
     }

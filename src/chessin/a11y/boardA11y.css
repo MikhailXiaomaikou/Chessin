@@ -1,0 +1,105 @@
+/*
+ * Accessible board layer (src/chessin/a11y/BoardA11y.tsx, plan X-9).
+ *
+ * The ARIA grid sits on top of chessground with `pointer-events: none`, so
+ * the mouse keeps reaching the real board; it only draws the keyboard cursor
+ * while it has focus (`data-active`). Colours come from the focus tokens in
+ * src/styles/global.css.
+ */
+.chessin-a11y-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.chessin-a11y-grid:focus-visible {
+  outline: 3px solid var(--chessin-focus-ring);
+  outline-offset: -1px;
+  box-shadow: 0 0 0 5px var(--chessin-focus-halo);
+}
+
+.chessin-a11y-row {
+  display: flex;
+  flex: 1 1 0;
+}
+
+.chessin-a11y-cell {
+  position: relative;
+  flex: 1 1 0;
+}
+
+/* The square cursor: a thick ring with a white halo so it reads on dark and light squares. */
+.chessin-a11y-grid[data-active] .chessin-a11y-cell[data-cursor]::after {
+  content: "";
+  position: absolute;
+  inset: 5%;
+  border: 3px solid var(--chessin-focus-ring);
+  border-radius: 6%;
+  box-shadow:
+    0 0 0 2px var(--chessin-focus-halo),
+    inset 0 0 0 2px var(--chessin-focus-halo);
+}
+
+/* A picked-up piece keeps a double ring on its origin square. */
+.chessin-a11y-grid[data-active] .chessin-a11y-cell[data-picked]::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 3px double var(--chessin-focus-ring);
+  border-radius: 50%;
+}
+
+/* Legal destinations of the picked piece: a dot, like chessground's move-dest hint. */
+.chessin-a11y-grid[data-active] .chessin-a11y-cell[data-dest]::before {
+  content: "";
+  position: absolute;
+  inset: 36%;
+  border-radius: 50%;
+  background: var(--chessin-focus-ring);
+  box-shadow: 0 0 0 2px var(--chessin-focus-halo);
+  opacity: 0.85;
+}
+
+/* Visually hidden live region (the usual clip pattern; `display: none` would silence it). */
+.chessin-a11y-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Okabe–Ito palette (src/chessin/a11y/palette.ts): hue is not the only cue.
+ * Engine alternatives (pale brushes) and threats are dashed, the best line is
+ * solid; the last-move square of a criticised move gets a dashed outline, of
+ * a praised move a solid one. Dash lengths are in board squares, as in
+ * src/chessin/board/threatArrows.css.
+ */
+[data-annotation-palette="okabe-ito"] .cg-wrap svg.cg-shapes line[marker-end="url(#arrowhead-pb)"],
+[data-annotation-palette="okabe-ito"] .cg-wrap svg.cg-shapes line[marker-end="url(#arrowhead-pg)"],
+[data-annotation-palette="okabe-ito"] .cg-wrap svg.cg-shapes line[marker-end="url(#arrowhead-pr)"],
+[data-annotation-palette="okabe-ito"]
+  .cg-wrap
+  svg.cg-shapes
+  line[marker-end="url(#arrowhead-pgr)"] {
+  stroke-dasharray: 0.32 0.32;
+}
+
+[data-annotation-palette="okabe-ito"][data-annotation-quality="bad"] cg-board square.last-move {
+  outline: 3px dashed var(--dark-color, currentColor);
+  outline-offset: -3px;
+}
+
+[data-annotation-palette="okabe-ito"][data-annotation-quality="good"] cg-board square.last-move {
+  outline: 3px solid var(--dark-color, currentColor);
+  outline-offset: -3px;
+}

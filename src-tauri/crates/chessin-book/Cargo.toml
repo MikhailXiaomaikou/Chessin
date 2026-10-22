@@ -1,0 +1,21 @@
+[package]
+name = "chessin-book"
+version = "0.1.0"
+description = "Opening books (Polyglot `.bin`) and Syzygy endgame tablebases as position sources: lookups, probes and move ordering, no Tauri"
+license = "GPL-3.0-only"
+repository = "https://github.com/MikhailXiaomaikou/Chessin"
+edition = "2021"
+publish = false
+
+[dependencies]
+shakmaty = { workspace = true }
+shakmaty-syzygy = { workspace = true }
+memmap2 = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+specta = { workspace = true }
+thiserror = "2"
+
+[dev-dependencies]
+# Cross-checks our Polyglot keys against the reader the app uses for engine play.
+polyglot-book-rs = { workspace = true }
+tempfile = "3"

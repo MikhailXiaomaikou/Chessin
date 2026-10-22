@@ -27,8 +27,11 @@ import { useAtom, useAtomValue } from "jotai";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import { AnnotateFirstPanel, annotateFirstFamily } from "@/chessin/annotateFirst";
 import FindMoveBoard from "@/chessin/board/FindMoveBoard";
+import DeviationCards from "@/chessin/deviation/DeviationCards";
 import { ExplanationCard, summarizeGame } from "@/chessin/explain";
+import { GuessPanel, guessSessionFamily, ReviewModeButtons } from "@/chessin/guess";
 import { cancelJob, type Job, jobsAtom, retryJob } from "@/chessin/jobs/queue";
 import { accountPlayerNames } from "@/chessin/sync/myGames";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
@@ -108,6 +111,9 @@ export default function ReviewPanel() {
   const gameKey = gameKeyForOrigin(currentTab?.gameOrigin);
   const engines = useAtomValue(enginesAtom);
   const hasEngine = pickReviewEngine(engines ?? []) !== null;
+  // Chessin S4-6: 猜着 / 先自己注释 take over the tab while active (state per tab).
+  const guessSession = useAtomValue(guessSessionFamily(tabId));
+  const annotateFirst = useAtomValue(annotateFirstFamily(tabId));
 
   const jobs = useAtomValue(jobsAtom);
   const job = useMemo(() => {
@@ -145,6 +151,8 @@ export default function ReviewPanel() {
     startReviewForActiveTab(preset, color === "both" ? null : color);
 
   if (!currentTab) return null;
+  if (guessSession) return <GuessPanel tabId={tabId} review={review} />;
+  if (annotateFirst) return <AnnotateFirstPanel tabId={tabId} review={review} />;
 
   return (
     <ScrollArea h="100%" offsetScrollbars>
@@ -188,6 +196,7 @@ export default function ReviewPanel() {
                   </Button>
                 </Tooltip>
               </Group>
+              <ReviewModeButtons tabId={tabId} review={null} />
             </Stack>
           </Card>
         )}
@@ -358,6 +367,8 @@ function ReviewView({
               </Button>
             </Group>
           </Group>
+          {/* Chessin S4-3: event badge + 我偏离了 / 对手偏离了 cards (before the summary strip). */}
+          <DeviationCards gameKey={review.gameKey} />
           <SimpleGrid cols={2} spacing="xs">
             <Stat
               label={t("Review.Summary.Accuracy")}
@@ -398,6 +409,7 @@ function ReviewView({
             </Text>
             <ColorPicker value={color} onChange={onColorChange} />
           </Group>
+          <ReviewModeButtons tabId={tabId} review={review} />
         </Stack>
       </Card>
 
@@ -503,6 +515,8 @@ function MomentCard({
   };
 
   const playedLabel = moveLabel(moment.ply, moment.playedSan);
+  // t("Review.Kind.blunder") t("Review.Kind.mistake") t("Review.Kind.missed_win")
+  // t("Review.Kind.missed_draw") t("Review.Kind.only_move") t("Review.Kind.time_pressure")
   const kindLabel = t(`Review.Kind.${moment.kind}`);
   const underPressure = review.summary.timePressureMoves.includes(moment.ply);
 

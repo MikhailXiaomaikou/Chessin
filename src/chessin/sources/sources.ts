@@ -34,11 +34,24 @@ export const sourceSchema = z.discriminatedUnion("kind", [
         speeds: z.array(z.string()).optional(),
     }),
     z.object({ kind: z.literal("chessdb") }),
+    // S4-4: a Polyglot opening book (the explorer shows its weighted moves).
+    z.object({
+        kind: z.literal("book"),
+        path: z.string().min(1),
+        title: z.string(),
+    }),
+    // S4-4: a directory of Syzygy tables; probed by the tablebase panel, not the explorer.
+    z.object({
+        kind: z.literal("tablebase-local"),
+        dir: z.string().min(1),
+    }),
 ]);
 
 export type Source = z.infer<typeof sourceSchema>;
 export type SourceKind = Source["kind"];
 export type LocalSource = Extract<Source, { kind: "local" }>;
+export type BookSource = Extract<Source, { kind: "book" }>;
+export type TablebaseSource = Extract<Source, { kind: "tablebase-local" }>;
 
 export const DEFAULT_SOURCE_STORAGE_KEY = "chessin.defaultSource";
 
@@ -57,9 +70,39 @@ export function localSource(path: string, title?: string): LocalSource {
     return { kind: "local", path, title: title ?? titleFromPath(path) };
 }
 
+/** `Perfect2023.bin` → `Perfect2023`, `Book.ctg` → `Book`. */
+export function titleFromBookPath(path: string): string {
+    const name = path.split(/[\\/]/).pop() ?? path;
+    return name.replace(/\.(bin|ctg)$/i, "") || path;
+}
+
+export function bookSource(path: string, title?: string): BookSource {
+    return { kind: "book", path, title: title ?? titleFromBookPath(path) };
+}
+
+export function tablebaseSource(dir: string): TablebaseSource {
+    return { kind: "tablebase-local", dir };
+}
+
 /** Stable identity. Two `lichess` sources with different filters are the same source. */
 export function sourceKey(source: Source): string {
-    return source.kind === "local" ? `local:${source.path}` : source.kind;
+    switch (source.kind) {
+        case "local":
+            return `local:${source.path}`;
+        case "book":
+            return `book:${source.path}`;
+        case "tablebase-local":
+            return `tablebase-local:${source.dir}`;
+        default:
+            return source.kind;
+    }
+}
+
+/** Sources that need the network (the offline badge applies to them). */
+export function isOnlineSource(source: Source): boolean {
+    return (
+        source.kind === "lichess" || source.kind === "lichess-masters" || source.kind === "chessdb"
+    );
 }
 
 export function sameSource(a: Source, b: Source): boolean {
@@ -89,6 +132,10 @@ export function sourceLabel(source: Source, t: (key: string) => string): string 
             return t("Sources.LichessMyLevel");
         case "chessdb":
             return "chessdb.cn";
+        case "book":
+            return source.title;
+        case "tablebase-local":
+            return t("Tablebase.LocalSource");
     }
 }
 

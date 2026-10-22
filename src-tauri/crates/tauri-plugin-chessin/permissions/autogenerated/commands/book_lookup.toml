@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-book-lookup"
+description = "Enables the book_lookup command without any pre-configured scope."
+commands.allow = ["book_lookup"]
+
+[[permission]]
+identifier = "deny-book-lookup"
+description = "Denies the book_lookup command without any pre-configured scope."
+commands.deny = ["book_lookup"]

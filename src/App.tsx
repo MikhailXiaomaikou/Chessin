@@ -60,6 +60,7 @@ const colorSchemeManager = localStorageColorSchemeManager({
 import { ask } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
+import { registerBookCommands } from "@/chessin/book/commands";
 import { registerSourceCommands } from "@/chessin/sources/commands";
 import { defaultSourceAtom } from "@/chessin/sources/sources";
 import ErrorComponent from "@/components/ErrorComponent";
@@ -168,6 +169,7 @@ function useAppStartup() {
 
       const store = getDefaultStore();
       registerSourceCommands();
+      registerBookCommands();
 
       const unlistenFile = await listen<string>("open-cli-file", ({ payload }) => {
         void openCommandLineFile(payload, setTabs, setActiveTab, navigateToBoard);

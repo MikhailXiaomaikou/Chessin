@@ -47,4 +47,8 @@ permissions = [
     "allow-index-position",
     "allow-index-pawn-candidates",
     "allow-index-games",
+    "allow-book-lookup",
+    "allow-book-info",
+    "allow-tablebase-probe",
+    "allow-tablebase-status",
 ]

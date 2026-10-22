@@ -22,9 +22,12 @@ import { match } from "ts-pattern";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { Chessground, type ChessgroundRef } from "@/chessground/Chessground";
+import BoardA11y from "@/chessin/a11y/BoardA11y";
+import { annotationColor, annotationQuality, paletteBrushes } from "@/chessin/a11y/palette";
 import { useBoardOrientation } from "@/chessin/board/orientationAtom";
 import "@/chessin/board/threatArrows.css";
 import {
+  annotationPaletteAtom,
   autoPromoteAtom,
   bestMovesFamily,
   currentEvalOpenAtom,
@@ -144,6 +147,8 @@ function Board({
   const forcedEP = useAtomValue(forcedEnPassantAtom);
   const showCoordinates = useAtomValue(showCoordinatesAtom);
   const materialDisplay = useAtomValue(materialDisplayAtom);
+  // Chessin (S4-5, X-9): arrow / annotation colour palette ("default" | "okabe-ito").
+  const palette = useAtomValue(annotationPaletteAtom);
 
   let dests: Map<SquareName, SquareName[]> = pos ? chessgroundDests(pos) : new Map();
   if (forcedEP && pos) {
@@ -354,8 +359,10 @@ function Board({
 
   const theme = useMantineTheme();
   const color = ANNOTATION_INFO[currentNode.annotations[0]]?.color || "gray";
-  const lightColor = theme.colors[color][6];
-  const darkColor = theme.colors[color][8];
+  // Chessin (S4-5): under the Okabe–Ito palette the annotation colour comes from it.
+  const paletteColor = annotationColor(currentNode.annotations[0], palette);
+  const lightColor = paletteColor ?? theme.colors[color][6];
+  const darkColor = paletteColor ?? theme.colors[color][8];
 
   const [enableBoardScroll] = useAtom(enableBoardScrollAtom);
   const [snapArrows] = useAtom(snapArrowsAtom);
@@ -390,6 +397,14 @@ function Board({
 
   const topPlayer = orientation === "white" ? headers.black : headers.white;
   const bottomPlayer = orientation === "white" ? headers.white : headers.black;
+
+  // Chessin (S4-5): what chessground gets as `movable.dests`; the keyboard layer uses the same map.
+  const movableDests =
+    editingMode || viewOnly
+      ? undefined
+      : disableVariations && currentNode.children.length > 0
+        ? undefined
+        : dests;
 
   return (
     <>
@@ -487,6 +502,8 @@ function Board({
                   : undefined
               }
               className={`${classes.chessboard} ${is3d ? "is3d" : ""}`}
+              data-annotation-palette={palette}
+              data-annotation-quality={annotationQuality(visualAnnotation)}
               ref={boardRef}
               onClick={() => {
                 eraseDrawablesOnClick && clearShapes();
@@ -528,12 +545,7 @@ function Board({
                 movable={{
                   free: editingMode,
                   color: movableColor,
-                  dests:
-                    editingMode || viewOnly
-                      ? undefined
-                      : disableVariations && currentNode.children.length > 0
-                        ? undefined
-                        : dests,
+                  dests: movableDests,
                   showDests,
                   events: {
                     after(orig, dest, metadata) {
@@ -618,11 +630,22 @@ function Board({
                       opacity: 0.45,
                       lineWidth: 10,
                     },
+                    // Chessin (S4-5): Okabe–Ito overrides of these and chessground's built-in brushes.
+                    ...paletteBrushes(palette),
                   } as unknown as DrawBrushes,
                   onChange: (shapes) => {
                     setShapes(shapes);
                   },
                 }}
+              />
+              {/* Chessin (S4-5, X-9): ARIA grid, live region and keyboard focus mode (pointer-events: none). */}
+              <BoardA11y
+                fen={currentNode.fen}
+                orientation={orientation}
+                dests={movableDests}
+                movable={movableColor}
+                autoPromote={autoPromote}
+                onMove={makeMove}
               />
             </Box>
           </Group>

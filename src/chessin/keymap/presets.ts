@@ -44,6 +44,8 @@ type Overrides = Readonly<Record<string, string>>;
  * | NEXT_GAME            | alt+arrowdown*     | pagedown          |
  * | PREVIOUS_GAME        | alt+arrowup*       | pageup            |
  * | COMMAND_PALETTE      | mod+k (unchanged)  | mod+k             |
+ * | REVEAL               | r (Chessin, S4-6)  | r                 |
+ * | START_REVIEW         | t (Chessin, S4-1)  | t                 |
  *
  * (*) see the module comment: ChessBase's own F10 / Ctrl+F10 is ambiguous.
  * `ctrl+f` is literal on every platform: on macOS it is ⌃F, which leaves ⌘F free.
@@ -56,6 +58,10 @@ const CHESSBASE_OVERRIDES: Overrides = {
     // `ctrl+f` flips the board here (see the module comment): "find similar"
     // is unbound and reached through the palette.
     FIND_SIMILAR: "",
+    // S4-6: "揭晓" (guess-the-move / 先自己注释) has no ChessBase key; `r` is free in this preset.
+    REVEAL: "r",
+    // S4-1: ChessBase has no review queue; `t` is free in its board window.
+    START_REVIEW: "t",
 };
 
 /**
@@ -74,6 +80,8 @@ const CHESSBASE_OVERRIDES: Overrides = {
  * | GO_TO_BRANCH_END     | shift+arrowdown**  | arrowdown         |
  * | NEXT_BRANCHING       | shift+arrowright   | shift+arrowright  |
  * | PREVIOUS_BRANCHING   | shift+arrowleft    | shift+arrowleft   |
+ * | REVEAL               | r (Chessin, S4-6)  | r                 |
+ * | START_REVIEW         | t (Chessin, S4-1)  | t                 |
  *
  * (**) not a Lichess key; moved out of the way of ↑ / ↓.
  */
@@ -83,6 +91,10 @@ const LICHESS_OVERRIDES: Overrides = {
     GO_TO_END: "arrowdown",
     GO_TO_BRANCH_START: "shift+arrowup",
     GO_TO_BRANCH_END: "shift+arrowdown",
+    // S4-6: "揭晓" (guess-the-move / 先自己注释); Lichess has no such key and `r` is free here.
+    REVEAL: "r",
+    // S4-1: Lichess binds nothing to `t` on the analysis board.
+    START_REVIEW: "t",
 };
 
 const PRESET_OVERRIDES: Readonly<Record<KeymapPresetName, Overrides>> = {

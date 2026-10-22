@@ -1,22 +1,36 @@
 import i18n from "i18next";
 import { summarizeGame } from "@/chessin/explain";
+import { type LoadedQueue, loadQueue } from "@/chessin/queue/load";
 import { isReview, REVIEW_DOC_KIND, type Review } from "@/chessin/review/model";
 import { getDoc, listDocs } from "@/chessin/store/libraryStore";
 import { listMyGames } from "@/chessin/sync/myGames";
 import { loadReviewGameModule } from "./optional";
 
 /**
- * Data behind the "今天" card on the "+" tab: cards due (from
- * `notebookStatsAtom`), synced games that have no review yet, and one
- * summary sentence of the most recent review. Every source is optional —
- * a missing module or an empty library just yields nothing.
+ * Data behind the "今天" card on the "+" tab: today's unified review queue
+ * (S4-1: minutes, items and the per-source breakdown), synced games that
+ * have no review yet, and one summary sentence of the most recent review.
+ * Every source is optional — a missing module or an empty library just
+ * yields nothing.
  */
 
 export type TodayExtras = {
+    /** The built queue (`null` when building it failed). */
+    queue: LoadedQueue | null;
     /** Synced games without a review (`null` when unknown). */
     pendingReviews: number | null;
     latest: { title: string | null; sentence: string } | null;
 };
+
+/** Today's queue, or `null` on failure (the card then falls back to the card count). */
+export async function loadTodayQueue(now = Date.now()): Promise<LoadedQueue | null> {
+    try {
+        return await loadQueue(now);
+    } catch (e) {
+        console.warn("today: building the review queue failed", e);
+        return null;
+    }
+}
 
 export const PENDING_GAMES_LIMIT = 50;
 
@@ -65,10 +79,11 @@ export async function latestReviewSummary(): Promise<TodayExtras["latest"]> {
     }
 }
 
-export async function loadTodayExtras(): Promise<TodayExtras> {
-    const [pendingReviews, latest] = await Promise.all([
+export async function loadTodayExtras(now = Date.now()): Promise<TodayExtras> {
+    const [queue, pendingReviews, latest] = await Promise.all([
+        loadTodayQueue(now),
         countGamesPendingReview(),
         latestReviewSummary(),
     ]);
-    return { pendingReviews, latest };
+    return { queue, pendingReviews, latest };
 }

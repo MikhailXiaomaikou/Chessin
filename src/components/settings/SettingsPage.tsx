@@ -28,8 +28,11 @@ import { useLoaderData } from "@tanstack/react-router";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAtom, useSetAtom } from "jotai";
 import { RESET } from "jotai/utils";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import AnnotationPaletteSelect from "@/chessin/a11y/PaletteSelect";
+import TablebaseSettings from "@/chessin/book/TablebaseSettings";
+import { loadPinyin } from "@/chessin/commands/pinyin";
 import BackupSettings from "@/chessin/history/BackupSettings";
 import { keybindLabel } from "@/chessin/keymap/labels";
 import { MigrateSettingsButton } from "@/chessin/migrate/MigrateModal";
@@ -41,6 +44,8 @@ import {
   keymapPresetAtom,
   presetLabel,
 } from "@/chessin/keymap/presets";
+import { ModifiedMarker, ResetRowButton, SettingsToolbar } from "@/chessin/settings/ResetControls";
+import { searchSettings, synonymHints } from "@/chessin/settings/search";
 import { autoSyncAtom } from "@/chessin/sync/autoSync";
 import {
   autoPromoteAtom,
@@ -104,11 +109,14 @@ interface SettingItem {
 }
 
 function SettingRow({
+  id,
   title,
   description,
   children,
   highlight,
 }: {
+  /** Chessin (S4-5, X-10): row id of `settings[]`; drives the "已修改" dot and the per-row 重置. */
+  id?: string;
   title: string;
   description: string;
   children: React.ReactNode;
@@ -123,12 +131,18 @@ function SettingRow({
       style={highlight ? { backgroundColor: "var(--mantine-color-yellow-light)" } : undefined}
     >
       <div>
-        <Text>{title}</Text>
+        <Text>
+          {title}
+          {id && <ModifiedMarker id={id} />}
+        </Text>
         <Text size="xs" c="dimmed">
           {description}
         </Text>
       </div>
-      {children}
+      <Group gap="xs" wrap="nowrap">
+        {id && <ResetRowButton id={id} />}
+        {children}
+      </Group>
     </Group>
   );
 }
@@ -166,6 +180,14 @@ export default function Page() {
   const { t, i18n } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // Chessin (S4-5, X-10): pinyin search columns become available once `pinyin-pro` has loaded.
+  const [pinyinReady, setPinyinReady] = useState(false);
+  useEffect(() => {
+    loadPinyin().then(
+      () => setPinyinReady(true),
+      () => {},
+    );
+  }, []);
 
   const [keyMap, setKeyMap] = useAtom(keyMapAtom);
   const setKeymapPreset = useSetAtom(keymapPresetAtom);
@@ -516,6 +538,24 @@ export default function Page() {
           </div>
         ),
       },
+      // Chessin (S4-5, X-9): Okabe–Ito colour-blind-safe arrows / annotations
+      {
+        id: "annotation-palette",
+        category: "appearance",
+        title: t("A11y.Settings.Palette"),
+        description: t("A11y.Settings.Palette.Desc"),
+        keywords: [
+          "palette",
+          "okabe",
+          "colorblind",
+          "colourblind",
+          "arrows",
+          "色盲",
+          "配色",
+          "箭头",
+        ],
+        render: () => <AnnotationPaletteSelect />,
+      },
       // Repertoire settings
       {
         id: "repertoire-depth",
@@ -680,6 +720,24 @@ export default function Page() {
         keywords: ["backup", "library", "sqlite", "备份", "棋谱库"],
         render: () => <BackupSettings />,
       },
+      // Chessin: Syzygy tablebase directory + "引擎使用本地残局库" (S4-4)
+      {
+        id: "tablebase-directory",
+        category: "directories",
+        title: t("Tablebase.Settings.Title"),
+        description: t("Tablebase.Settings.Desc"),
+        keywords: [
+          "tablebase",
+          "syzygy",
+          "endgame",
+          "directory",
+          "engine",
+          "残局库",
+          "残局",
+          "引擎",
+        ],
+        render: () => <TablebaseSettings />,
+      },
     ],
     [
       t,
@@ -758,34 +816,35 @@ export default function Page() {
     [t],
   );
 
+  // Chessin (S4-5, X-10): zh / en / pinyin / ChessBase-synonym search (src/chessin/settings/search.ts).
   const filteredSettings = useMemo(() => {
     if (!searchQuery.trim()) return null;
-    const query = searchQuery.toLowerCase();
-    return settings.filter(
-      (setting) =>
-        setting.title.toLowerCase().includes(query) ||
-        setting.description.toLowerCase().includes(query) ||
-        categoryInfo[setting.category].title.toLowerCase().includes(query) ||
-        setting.id.toLowerCase().includes(query) ||
-        setting.keywords?.some((kw) => kw.toLowerCase().includes(query)),
+    const matches = searchSettings(
+      settings.map((setting) => ({
+        ...setting,
+        categoryTitle: categoryInfo[setting.category].title,
+      })),
+      searchQuery,
+      { pinyin: pinyinReady },
     );
-  }, [searchQuery, settings, categoryInfo]);
+    return { items: matches.map((m) => m.item), hints: synonymHints(matches) };
+  }, [searchQuery, settings, categoryInfo, pinyinReady]);
 
   const renderSearchResults = () => {
     if (!filteredSettings) return null;
 
-    if (filteredSettings.length === 0) {
+    if (filteredSettings.items.length === 0) {
       return (
         <Card withBorder p="lg" className={classes.card} w="100%">
           <Text c="dimmed" ta="center">
-            No settings found for "{searchQuery}"
+            {t("Settings.Search.NoResults", { query: searchQuery })}
           </Text>
         </Card>
       );
     }
 
     // Group filtered settings by category
-    const groupedSettings = filteredSettings.reduce(
+    const groupedSettings = filteredSettings.items.reduce(
       (acc, setting) => {
         if (!acc[setting.category]) {
           acc[setting.category] = [];
@@ -798,6 +857,11 @@ export default function Page() {
 
     return (
       <Card withBorder p="lg" className={classes.card} w="100%">
+        {filteredSettings.hints.map((hint) => (
+          <Text key={`${hint.term}-${hint.target}`} size="xs" c="dimmed">
+            {t("Settings.Search.Synonym", { term: hint.term, target: hint.target })}
+          </Text>
+        ))}
         {Object.entries(groupedSettings).map(([category, categorySettings]) => (
           <div key={category}>
             <Group gap="xs" mt="md" mb="xs">
@@ -807,7 +871,12 @@ export default function Page() {
               </Text>
             </Group>
             {categorySettings.map((setting) => (
-              <SettingRow key={setting.id} title={setting.title} description={setting.description}>
+              <SettingRow
+                key={setting.id}
+                id={setting.id}
+                title={setting.title}
+                description={setting.description}
+              >
                 {setting.render()}
               </SettingRow>
             ))}
@@ -820,7 +889,12 @@ export default function Page() {
   const renderCategorySettings = (category: SettingCategory) => {
     const categorySettings = settings.filter((s) => s.category === category);
     return categorySettings.map((setting) => (
-      <SettingRow key={setting.id} title={setting.title} description={setting.description}>
+      <SettingRow
+        key={setting.id}
+        id={setting.id}
+        title={setting.title}
+        description={setting.description}
+      >
         {setting.render()}
       </SettingRow>
     ));
@@ -828,10 +902,11 @@ export default function Page() {
 
   return (
     <Stack h="100%" gap={0}>
-      <Group px="md" pt="md" pb="sm">
+      <Group px="md" pt="md" pb="sm" justify="space-between" wrap="nowrap">
         <TextInput
           ref={searchInputRef}
-          placeholder={t("Common.Search")}
+          aria-label={t("Settings.Search.Placeholder")}
+          placeholder={t("Settings.Search.Placeholder")}
           leftSection={<IconSearch size="1rem" />}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.currentTarget.value)}
@@ -846,6 +921,8 @@ export default function Page() {
           }}
           style={{ flex: 1, maxWidth: 400 }}
         />
+        {/* Chessin (S4-5, X-10): 重置全部 / 导出设置 / 导入设置 */}
+        <SettingsToolbar />
       </Group>
       {filteredSettings ? (
         <ScrollArea flex={1} px="md">

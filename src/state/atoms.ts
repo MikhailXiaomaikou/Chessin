@@ -15,6 +15,7 @@ import type {
 import type { ReviewLog } from "ts-fsrs";
 import { z } from "zod";
 import type { BestMoves, GoMode } from "@/bindings";
+import type { AnnotationPalette } from "@/chessin/a11y/palette";
 import {
     DEFAULT_SOURCE,
     defaultSourceAtom,
@@ -263,6 +264,11 @@ export const pieceSetAtom = atom(
     (_get, set, value: string) => set(storedPieceSetAtom, value),
 );
 export const boardImageAtom = atomWithStorage<string>("board-image", "gray.svg");
+// Chessin (S4-5, X-9): arrow / annotation colours; "okabe-ito" is the colour-blind-safe palette.
+export const annotationPaletteAtom = atomWithStorage<AnnotationPalette>(
+    "annotation-palette",
+    "default",
+);
 export const is3dAtom = atomWithStorage<boolean>("is-3d", false);
 export const primaryColorAtom = atomWithStorage<MantineColor>("mantine-primary-color", "blue");
 export const sessionsAtom = atomWithStorage<Session[]>("sessions", []);

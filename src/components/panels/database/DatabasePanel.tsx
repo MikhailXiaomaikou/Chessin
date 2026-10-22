@@ -8,6 +8,7 @@ import useSWR from "swr/immutable";
 import { match } from "ts-pattern";
 import { useStore } from "zustand";
 import type { NormalizedGame } from "@/bindings";
+import { BookExplorer } from "@/chessin/book/BookExplorer";
 import { explorerViaIndex } from "@/chessin/search/explorer";
 import { IndexChip } from "@/chessin/search/IndexChip";
 import { isIndexAvailable, useIndexState } from "@/chessin/search/index";
@@ -251,7 +252,7 @@ function DatabasePanel() {
         </Anchor>
       </Text>
     );
-  } else if (source.kind === "chessdb") {
+  } else if (source.kind === "chessdb" || source.kind === "tablebase-local") {
     notice = (
       <Text c="dimmed" fz="sm">
         {t("Sources.Unsupported")}
@@ -262,6 +263,11 @@ function DatabasePanel() {
   } else if (error && !isLocal && !isStaleRequestError(error)) {
     // Local search errors are already reported through notifications.
     notice = <Alert color="red">{error.toString()}</Alert>;
+  }
+
+  // S4-4: a Polyglot book source has its own panel (moves with weights; no games/options).
+  if (source.kind === "book") {
+    return <BookExplorer tabId={tabId} source={source} fen={debouncedFen} />;
   }
 
   const header = (
@@ -333,6 +339,7 @@ function DatabasePanel() {
               .with("lichess", () => <LichessOptionsPanel />)
               .with("lichess-masters", () => <MasterOptionsPanel />)
               .with("chessdb", () => null)
+              .with("tablebase-local", () => null)
               .exhaustive()}
           </ScrollArea>
         </Panel>

@@ -16,7 +16,12 @@
 //! sidecar of a game database (see `chessin_index`); the open indexes are
 //! cached in [`IndexState`] and `index_build` reports through the
 //! [`INDEX_PROGRESS_EVENT`] event.
+//!
+//! The opening-book and tablebase commands (`book_*`, `tablebase_*`) read
+//! Polyglot books and probe Syzygy tables through `chessin_book`; the open
+//! books and table directories are cached in [`BookState`].
 
+mod book;
 mod index;
 mod library;
 mod scan;
@@ -31,6 +36,8 @@ use tauri::{
 
 use chessin_core::store::{now_ms, NewDocument};
 
+pub use book::BookState;
+pub use chessin_book::{BookInfo, BookMove, TablebaseMove, TablebaseProbe, TablebaseStatus};
 pub use chessin_cb::{CbhImportReport, UnsupportedAnnotation};
 pub use chessin_core::store::{
     CachedEval, CardRecord, CardStats, Document, DocumentMeta, JobRecord, VersionMeta,
@@ -536,6 +543,69 @@ async fn index_games(db_path: String, ids: Vec<u32>) -> Result<Vec<IndexGame>, S
     .map_err(|e| e.to_string())?
 }
 
+// ----- opening books and tablebases (S4-4) ---------------------------------
+
+/// The moves of a Polyglot (`.bin`) book for `fen`, heaviest first, each
+/// with its `weight` and `learn` fields and the move as UCI and SAN. The
+/// book stays memory-mapped in [`BookState`] and is reopened when the file
+/// changes. A `.ctg` file is an error: CTG is not read.
+#[tauri::command]
+#[specta::specta]
+async fn book_lookup(
+    path: String,
+    fen: String,
+    state: State<'_, BookState>,
+) -> Result<Vec<BookMove>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.lookup(&path, &fen))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Format (`polyglot` or `ctg`), entry count (Polyglot only) and size of a
+/// book file; an error when it cannot be read.
+#[tauri::command]
+#[specta::specta]
+async fn book_info(path: String) -> Result<BookInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || BookState::info(&path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// WDL/DTZ of `fen` from the Syzygy tables in `dir` (side-to-move point of
+/// view: `wdl` -2 loss … 2 win, `dtz` plies to zeroing, `None` with WDL-only
+/// tables) with every legal move the tables know, best first for the side
+/// to move; `None` when no table covers the position. The directory's
+/// tables are listed once and cached in [`BookState`]; a corrupt table is an
+/// error.
+#[tauri::command]
+#[specta::specta]
+async fn tablebase_probe(
+    dir: String,
+    fen: String,
+    state: State<'_, BookState>,
+) -> Result<Option<TablebaseProbe>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.probe(&dir, &fen))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Relists `dir` and reports the size of its largest table (`pieces`, 0
+/// when none) and how many table files it holds; an error when it is not a
+/// readable directory.
+#[tauri::command]
+#[specta::specta]
+async fn tablebase_status(
+    dir: String,
+    state: State<'_, BookState>,
+) -> Result<TablebaseStatus, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.status(&dir))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn specta_builder<R: Runtime>() -> tauri_specta::Builder<R> {
     tauri_specta::Builder::<R>::new()
         .plugin_name(PLUGIN_NAME)
@@ -577,6 +647,10 @@ fn specta_builder<R: Runtime>() -> tauri_specta::Builder<R> {
             index_position,
             index_pawn_candidates,
             index_games,
+            book_lookup,
+            book_info,
+            tablebase_probe,
+            tablebase_status,
         ])
         // The payload of `chessin://index-progress`, which is emitted with
         // `app.emit` rather than as a tauri-specta event (those are named
@@ -611,6 +685,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 data_dir.join("chessin").join("library.sqlite"),
             ));
             app.manage(IndexState::new());
+            app.manage(BookState::new());
             Ok(())
         })
         .build()

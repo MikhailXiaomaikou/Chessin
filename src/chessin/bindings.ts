@@ -430,6 +430,61 @@ async indexGames(dbPath: string, ids: number[]) : Promise<Result<IndexGame[], st
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * The moves of a Polyglot (`.bin`) book for `fen`, heaviest first, each
+ * with its `weight` and `learn` fields and the move as UCI and SAN. The
+ * book stays memory-mapped in [`BookState`] and is reopened when the file
+ * changes. A `.ctg` file is an error: CTG is not read.
+ */
+async bookLookup(path: string, fen: string) : Promise<Result<BookMove[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|book_lookup", { path, fen }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Format (`polyglot` or `ctg`), entry count (Polyglot only) and size of a
+ * book file; an error when it cannot be read.
+ */
+async bookInfo(path: string) : Promise<Result<BookInfo, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|book_info", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * WDL/DTZ of `fen` from the Syzygy tables in `dir` (side-to-move point of
+ * view: `wdl` -2 loss … 2 win, `dtz` plies to zeroing, `None` with WDL-only
+ * tables) with every legal move the tables know, best first for the side
+ * to move; `None` when no table covers the position. The directory's
+ * tables are listed once and cached in [`BookState`]; a corrupt table is an
+ * error.
+ */
+async tablebaseProbe(dir: string, fen: string) : Promise<Result<TablebaseProbe | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|tablebase_probe", { dir, fen }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Relists `dir` and reports the size of its largest table (`pieces`, 0
+ * when none) and how many table files it holds; an error when it is not a
+ * readable directory.
+ */
+async tablebaseStatus(dir: string) : Promise<Result<TablebaseStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|tablebase_status", { dir }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -443,6 +498,44 @@ async indexGames(dbPath: string, ids: number[]) : Promise<Result<IndexGame[], st
 
 /** user-defined types **/
 
+/**
+ * What `book_info` tells about a file.
+ */
+export type BookInfo = { 
+/**
+ * `"polyglot"` or `"ctg"`.
+ */
+format: string; 
+/**
+ * Polyglot: the number of whole 16-byte entries. `None` for CTG, which
+ * is not read.
+ */
+entries: bigint | null; 
+/**
+ * File size.
+ */
+bytes: bigint }
+/**
+ * One move of a position in the book.
+ */
+export type BookMove = { 
+/**
+ * Standard UCI (`e1g1` for castling).
+ */
+uci: string; 
+/**
+ * SAN with check/mate suffix.
+ */
+san: string; 
+/**
+ * The entry's weight as stored; the share of a move is its weight over
+ * the sum of the position's weights.
+ */
+weight: number; 
+/**
+ * The entry's learn field as stored (0 in most books).
+ */
+learn: number }
 /**
  * One row of `eval_cache` (without `created_at`).
  */
@@ -787,6 +880,36 @@ created_at: bigint;
  * Unix milliseconds.
  */
 updated_at: bigint }
+/**
+ * A legal move with the tablebase result of the position after it, from
+ * the mover's point of view.
+ */
+export type TablebaseMove = { uci: string; san: string; wdl: number; dtz: number | null; 
+/**
+ * A capture or pawn move: resets the 50-move counter.
+ */
+zeroing: boolean; checkmate: boolean; stalemate: boolean; insufficient_material: boolean }
+/**
+ * The result of probing a position.
+ */
+export type TablebaseProbe = { wdl: number; dtz: number | null; checkmate: boolean; stalemate: boolean; insufficient_material: boolean; 
+/**
+ * Every legal move whose outcome the tables know, best first (see
+ * [`order_moves`]); empty for a finished game.
+ */
+best: TablebaseMove[] }
+/**
+ * What a tablebase directory offers.
+ */
+export type TablebaseStatus = { 
+/**
+ * Pieces of the largest table found (0 when none).
+ */
+pieces: number; 
+/**
+ * Table files found (`.rtbw` and `.rtbz`).
+ */
+files: number }
 /**
  * One kind of annotation that was not translated, and how often it occurred.
  */

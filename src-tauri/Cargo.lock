@@ -787,6 +787,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
+name = "chessin-book"
+version = "0.1.0"
+dependencies = [
+ "memmap2",
+ "polyglot-book-rs",
+ "serde",
+ "shakmaty",
+ "shakmaty-syzygy",
+ "specta",
+ "tempfile",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "chessin-cb"
 version = "0.1.0"
 dependencies = [
@@ -4297,7 +4311,7 @@ dependencies = [
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "rustls 0.23.37",
  "socket2 0.5.6",
  "thiserror 1.0.63",
@@ -4314,7 +4328,7 @@ dependencies = [
  "bytes",
  "rand 0.8.5",
  "ring",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "rustls 0.23.37",
  "slab",
  "thiserror 1.0.63",
@@ -4847,6 +4861,12 @@ checksum = "d626bb9dae77e28219937af045c257c28bfd3f69333c512553507f5f9798cb76"
 
 [[package]]
 name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "583034fd73374156e66797ed8e5b0d5690409c9226b22d87cb7f19821c05d152"
@@ -5367,6 +5387,22 @@ dependencies = [
  "bitflags 2.11.0",
  "btoi",
  "nohash-hasher",
+]
+
+[[package]]
+name = "shakmaty-syzygy"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ebc3f0398de2ee1e5ea65199b82c9a1cf30c4af6373ea236d4d44a9e173321c"
+dependencies = [
+ "arrayvec",
+ "bitflags 2.11.0",
+ "byteorder",
+ "libc",
+ "once_cell",
+ "rustc-hash 1.1.0",
+ "shakmaty",
+ "tracing",
 ]
 
 [[package]]
@@ -5934,6 +5970,7 @@ dependencies = [
 name = "tauri-plugin-chessin"
 version = "0.1.0"
 dependencies = [
+ "chessin-book",
  "chessin-cb",
  "chessin-core",
  "chessin-index",

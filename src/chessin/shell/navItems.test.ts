@@ -18,8 +18,13 @@ describe("nav items", () => {
             "repertoire",
             "train",
             "players",
+            "prep",
+            "events",
         ]);
         expect(NAV_ITEMS.find((i) => i.id === "files")?.child).toBe(true);
+        // S4-2 / S4-3: 备战 and 赛事复盘 are indented under 棋手.
+        expect(NAV_ITEMS.find((i) => i.id === "prep")?.child).toBe(true);
+        expect(NAV_ITEMS.find((i) => i.id === "events")?.child).toBe(true);
         expect(NAV_PINNED.map((i) => i.id)).toEqual(["engines", "settings"]);
         expect(navItemById("settings").labelKey).toBe("SideBar.Settings");
         expect(() => navItemById("nope" as never)).toThrow("unknown nav item nope");
@@ -42,6 +47,8 @@ describe("nav items", () => {
         expect(navIdForPath("/repertoire", false)).toBe("repertoire");
         expect(navIdForPath("/notebook", false)).toBe("train");
         expect(navIdForPath("/accounts", false)).toBe("players");
+        expect(navIdForPath("/prep", false)).toBe("prep");
+        expect(navIdForPath("/events", false)).toBe("events");
         expect(navIdForPath("/engines", false)).toBe("engines");
         expect(navIdForPath("/settings", false)).toBe("settings");
         expect(navIdForPath("/unknown", false)).toBeNull();

@@ -74,6 +74,12 @@ const keys: KeyMap = {
     // Chessin (S3-6): shell back / forward over pages and board tabs (commands `nav.back` / `nav.forward`).
     NAV_BACK: { name: "Back", keys: `${meta}+[` },
     NAV_FORWARD: { name: "Forward", keys: `${meta}+]` },
+    // Chessin (S4-1): start today's review queue (command `queue.start`); single key, guarded in inputs.
+    START_REVIEW: { name: "Start today's review", keys: "t" },
+    // Chessin (S4-6): "揭晓" in guess-the-move / 先自己注释 (command `guess.reveal`); guarded in inputs.
+    REVEAL: { name: "Reveal", keys: "r" },
+    // Chessin (S4-5, X-9): focus the board's ARIA grid for keyboard play (command `board.focus`).
+    BOARD_FOCUS: { name: "Board keyboard mode", keys: "f6" },
 };
 
 /** The built-in defaults, frozen so presets and tests cannot mutate them. */

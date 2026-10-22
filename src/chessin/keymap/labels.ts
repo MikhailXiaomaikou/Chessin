@@ -102,6 +102,12 @@ export function keybindLabel(key: string, t: TFunction, fallback = key): string 
             return t("Keymap.NAV_BACK");
         case "NAV_FORWARD":
             return t("Keymap.NAV_FORWARD");
+        case "START_REVIEW":
+            return t("Keymap.START_REVIEW");
+        case "REVEAL":
+            return t("Keymap.REVEAL");
+        case "BOARD_FOCUS":
+            return t("Keymap.BOARD_FOCUS");
         default:
             return fallback;
     }
@@ -132,6 +138,7 @@ export const KEYMAP_GROUPS: KeymapGroup[] = [
             "TOGGLE_TAB_BAR",
             "NAV_BACK",
             "NAV_FORWARD",
+            "START_REVIEW",
         ],
     },
     {
@@ -167,6 +174,7 @@ export const KEYMAP_GROUPS: KeymapGroup[] = [
             "TOGGLE_ALL_ENGINES",
             "GENERATE_REPORT",
             "FIND_SIMILAR",
+            "BOARD_FOCUS",
         ],
     },
     {

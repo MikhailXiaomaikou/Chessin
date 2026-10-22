@@ -138,3 +138,56 @@ body {
 .mantine-ScrollArea-viewport {
   overscroll-behavior: none;
 }
+
+/*
+ * Chessin accessibility, S4-5 (plan X-9): focus and colour tokens.
+ *
+ *  - `--chessin-focus-ring` / `--chessin-focus-halo`: the keyboard ring and
+ *    its contrasting halo, used by the board's keyboard cursor
+ *    (src/chessin/a11y/boardA11y.css) and by the dock rules below.
+ *  - `--chessin-okabe-*`: the Okabe–Ito colour-blind-safe palette
+ *    (src/chessin/a11y/palette.ts holds the same values for chessground).
+ */
+:root {
+  --chessin-focus-ring: var(--mantine-primary-color-filled);
+  --chessin-focus-halo: rgba(255, 255, 255, 0.9);
+  --chessin-okabe-orange: #e69f00;
+  --chessin-okabe-sky-blue: #56b4e9;
+  --chessin-okabe-bluish-green: #009e73;
+  --chessin-okabe-yellow: #f0e442;
+  --chessin-okabe-blue: #0072b2;
+  --chessin-okabe-vermillion: #d55e00;
+  --chessin-okabe-reddish-purple: #cc79a7;
+  --chessin-okabe-black: #000000;
+}
+
+[data-mantine-color-scheme="dark"] {
+  --chessin-focus-halo: rgba(0, 0, 0, 0.75);
+}
+
+/*
+ * Board and dock: the same ring on the dock tabs, accordion controls, menu
+ * and list items, the move cells and the board's ARIA grid, with a halo so it
+ * stays visible over board images and dark panels.
+ */
+[role="tab"]:focus-visible,
+[role="option"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[role="gridcell"]:focus-visible,
+[data-chessin-board-grid]:focus-visible,
+.mantine-Accordion-control:focus-visible,
+.mantine-NavLink-root:focus-visible,
+.mantine-Menu-item:focus-visible,
+.cg-wrap:focus-visible {
+  outline: 2px solid var(--chessin-focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--chessin-focus-halo);
+}
+
+/* Users who asked for less motion get no board animations (chessground animates with CSS transforms). */
+@media (prefers-reduced-motion: reduce) {
+  cg-board piece,
+  cg-board square {
+    transition: none !important;
+  }
+}

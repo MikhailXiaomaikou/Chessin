@@ -1,10 +1,13 @@
 import { Accordion, Badge, Group, Paper, SimpleGrid, Stack, Text } from "@mantine/core";
 import { parseUci } from "chessops";
+import { useAtomValue } from "jotai";
 import { useContext } from "react";
 import { useTranslation } from "react-i18next";
 import useSWRImmutable from "swr/immutable";
 import { match, P } from "ts-pattern";
 import { useStore } from "zustand";
+import { probeTablebase, tablebaseDirAtom } from "@/chessin/book/tablebase";
+import { offlineModeAtom } from "@/chessin/shell/offlineAtom";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import { getTablebaseInfo, type TablebaseCategory } from "@/utils/lichess/api";
 import classes from "./TablebaseInfo.module.css";
@@ -13,9 +16,13 @@ function TablebaseInfo({ fen, turn }: { fen: string; turn: "white" | "black" }) 
   const { t } = useTranslation();
   const store = useContext(TreeStateContext)!;
   const makeMove = useStore(store, (s) => s.makeMove);
+  // S4-4: local Syzygy tables first when a directory is set (only them when offline), else Lichess.
+  const tablebaseDir = useAtomValue(tablebaseDirAtom);
+  const offline = useAtomValue(offlineModeAtom);
   const { data, error, isLoading } = useSWRImmutable(
-    ["tablebase", fen],
-    async ([_, fen]) => await getTablebaseInfo(fen),
+    ["tablebase", fen, tablebaseDir, offline],
+    async ([, fen, dir, offline]) =>
+      await probeTablebase(fen, { dir, offline, remote: getTablebaseInfo }),
   );
 
   const sortedMoves = data?.moves.sort((a, b) => {
@@ -47,6 +54,11 @@ function TablebaseInfo({ fen, turn }: { fen: string; turn: "white" | "black" }) 
           <Accordion.Control>
             <Group>
               <Text fw="bold">{t("Board.Analysis.Tablebase")}</Text>
+              {data?.local && (
+                <Badge size="xs" variant="light">
+                  {t("Tablebase.Local")}
+                </Badge>
+              )}
               {isLoading && (
                 <Group p="xs">
                   <Badge variant="transparent">{t("Common.Loading")}</Badge>
@@ -54,7 +66,7 @@ function TablebaseInfo({ fen, turn }: { fen: string; turn: "white" | "black" }) 
               )}
               {error && (
                 <Text>
-                  {t("Common.Error")}: {error}
+                  {t("Common.Error")}: {String(error)}
                 </Text>
               )}
               {data && <OutcomeBadge category={data.category} turn={turn} wins />}

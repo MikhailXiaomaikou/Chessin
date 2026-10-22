@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-tablebase-status"
+description = "Enables the tablebase_status command without any pre-configured scope."
+commands.allow = ["tablebase_status"]
+
+[[permission]]
+identifier = "deny-tablebase-status"
+description = "Denies the tablebase_status command without any pre-configured scope."
+commands.deny = ["tablebase_status"]

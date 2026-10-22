@@ -1,0 +1,16 @@
+/* "已修改" dot next to a setting's title (src/chessin/settings/ResetControls.tsx). */
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--mantine-primary-color-filled);
+  vertical-align: middle;
+  flex: none;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+}

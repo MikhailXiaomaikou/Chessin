@@ -36,6 +36,10 @@ const COMMANDS: &[&str] = &[
     "index_position",
     "index_pawn_candidates",
     "index_games",
+    "book_lookup",
+    "book_info",
+    "tablebase_probe",
+    "tablebase_status",
 ];
 
 fn main() {

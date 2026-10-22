@@ -7,7 +7,9 @@ import {
     IconFiles,
     IconHome,
     IconSettings,
+    IconSwords,
     IconTargetArrow,
+    IconTrophy,
     IconUsers,
 } from "@tabler/icons-react";
 
@@ -20,6 +22,7 @@ import {
  * keys are spelled out below for `i18next-cli extract`:
  *
  * t("Nav.Home") t("Nav.Library") t("Nav.Repertoire") t("Nav.Train") t("Nav.Players")
+ * t("Prep.Title") t("Nav.Events")
  * t("SideBar.Files") t("SideBar.Board") t("SideBar.Engines") t("SideBar.Settings")
  * t("Nav.ChessBase.Library") t("Nav.ChessBase.Collection") t("Nav.ChessBase.DefaultSource")
  * t("Nav.ChessBase.Repertoire")
@@ -33,6 +36,8 @@ export type NavId =
     | "repertoire"
     | "train"
     | "players"
+    | "prep"
+    | "events"
     | "engines"
     | "settings";
 
@@ -78,6 +83,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
     },
     { id: "train", to: "/notebook", labelKey: "Nav.Train", icon: IconTargetArrow },
     { id: "players", to: "/accounts", labelKey: "Nav.Players", icon: IconUsers },
+    // Chessin (S4-2): 备战 — opponent briefing, indented under 棋手.
+    { id: "prep", to: "/prep", labelKey: "Prep.Title", icon: IconSwords, child: true },
+    // Chessin (S4-3): 赛事复盘 — event review, next to 备战.
+    { id: "events", to: "/events", labelKey: "Nav.Events", icon: IconTrophy, child: true },
 ];
 
 /** Pinned at the bottom of the nav (设置 last, as in the wireframe). */
