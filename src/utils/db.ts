@@ -13,6 +13,8 @@ import {
     type QueryResponse,
 } from "@/bindings";
 import { CATALOG_BASE_URL } from "@/chessin/config";
+import { indexGames, isIndexGamesAvailable } from "@/chessin/search/index";
+import { clusterIds } from "@/chessin/search/mapping";
 import type { LocalOptions } from "@/components/panels/database/DatabasePanel";
 import { getDatabasesDir } from "@/utils/directories";
 import { unwrap } from "./unwrap";
@@ -198,4 +200,77 @@ export async function searchPosition(options: LocalOptions, tab: string) {
         return Promise.reject();
     }
     return res.data;
+}
+
+// Chessin (S3-2): the index-backed explorer. The wrappers and the build job
+// live in `src/chessin/search`; re-exported here next to `searchPosition`.
+export { ensureIndex, indexPosition } from "@/chessin/search/index";
+
+/** Ids closer than this share one `getGamesByIdsByOffset` window. */
+const GAMES_BY_ID_GAP = 64;
+
+/**
+ * Chessin (S3-2): the games with these ids, in the order given (ids that are
+ * not found are skipped). Uses S3-1's `index_games` (an id lookup on the
+ * `.db3`, no sidecar needed) when the command exists, otherwise — or when it
+ * fails — the OFFSET-based `getGamesByIdsByOffset`.
+ */
+export async function getGamesByIds(db: string, ids: number[]): Promise<NormalizedGame[]> {
+    if (ids.length === 0) return [];
+    if (isIndexGamesAvailable()) {
+        try {
+            return await indexGames(db, ids);
+        } catch (e) {
+            console.warn("[chessin] index_games failed; falling back to paging", e);
+        }
+    }
+    return getGamesByIdsByOffset(db, ids);
+}
+
+/**
+ * Fallback for builds without `index_games`. `get_games` has no id filter;
+ * ids are assigned in insertion order, so sorted by id a game sits at offset
+ * `id - 1` unless earlier games were deleted. The ids are grouped into
+ * windows that two consecutive pages of size `span` always cover, the rows
+ * are verified by id, and a game shifted out of its window by deletions is
+ * looked for one page earlier before being given up on.
+ */
+export async function getGamesByIdsByOffset(db: string, ids: number[]): Promise<NormalizedGame[]> {
+    const wanted = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0))).sort(
+        (a, b) => a - b,
+    );
+    if (wanted.length === 0) return [];
+    const wantedSet = new Set(wanted);
+    const found = new Map<number, NormalizedGame>();
+
+    const fetchPage = async (page: number, pageSize: number) => {
+        if (page < 1) return;
+        const res = await query_games(db, {
+            options: { skipCount: true, page, pageSize, sort: "id", direction: "asc" },
+        });
+        for (const game of res.data) {
+            if (wantedSet.has(game.id)) found.set(game.id, game);
+        }
+    };
+
+    await Promise.all(
+        clusterIds(wanted, GAMES_BY_ID_GAP).map(async ([lo, hi]) => {
+            const span = hi - lo + 1;
+            const page = Math.floor((lo - 1) / span) + 1;
+            await Promise.all([fetchPage(page, span), fetchPage(page + 1, span)]);
+            const missing = wanted.some((id) => id >= lo && id <= hi && !found.has(id));
+            if (missing) await fetchPage(page - 1, span);
+        }),
+    );
+
+    const out: NormalizedGame[] = [];
+    const seen = new Set<number>();
+    for (const id of ids) {
+        const game = found.get(id);
+        if (game && !seen.has(id)) {
+            seen.add(id);
+            out.push(game);
+        }
+    }
+    return out;
 }

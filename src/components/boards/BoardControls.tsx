@@ -20,6 +20,7 @@ import { memo, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import { useBoardOrientation } from "@/chessin/board/orientationAtom";
+import { HistoryControl } from "@/chessin/history/HistoryControl";
 import { isLibraryOrigin, isReadOnlySource, shouldAutoSave } from "@/chessin/save/saveModel";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import {
@@ -192,6 +193,8 @@ function BoardControls({
           </ActionIcon>
         </Tooltip>
       )}
+      {/* Chessin: "历史版本" of library documents (S3-7); renders nothing for other origins. */}
+      <HistoryControl />
       <Tooltip
         position="right"
         label={t("Board.Action.FlipBoard", {

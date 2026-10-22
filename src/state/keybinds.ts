@@ -69,6 +69,11 @@ const keys: KeyMap = {
     TOGGLE_TAB_BAR: { name: "Toggle Tab Bar", keys: `${meta}+shift+h` },
     // Chessin: browser-style "reopen the last closed tab" (command `view.reopenClosedTab`).
     REOPEN_TAB: { name: "Reopen closed tab", keys: `${meta}+shift+t` },
+    // Chessin (S3-2): the "查找相似" drawer (command `search.findSimilar`); guarded in inputs.
+    FIND_SIMILAR: { name: "Find similar games", keys: `${meta}+f` },
+    // Chessin (S3-6): shell back / forward over pages and board tabs (commands `nav.back` / `nav.forward`).
+    NAV_BACK: { name: "Back", keys: `${meta}+[` },
+    NAV_FORWARD: { name: "Forward", keys: `${meta}+]` },
 };
 
 /** The built-in defaults, frozen so presets and tests cannot mutate them. */

@@ -88,6 +88,7 @@ exclude = ["vendor/vampirc-uci"]
 [workspace.dependencies]
 chessin-cb = { path = "crates/chessin-cb" }
 chessin-core = { path = "crates/chessin-core" }
+chessin-index = { path = "crates/chessin-index" }
 tauri-plugin-chessin = { path = "crates/tauri-plugin-chessin" }
 tauri = "2.10.2"
 tauri-plugin = "2"
@@ -99,3 +100,8 @@ tauri-specta = { version = "^2.0.0-rc.20", features = ["derive", "typescript"] }
 rusqlite = { version = "0.28", features = ["bundled"] }
 trash = "5"
 dirs = "6"
+# Same versions the app already resolves (see Cargo.lock), shared by `chessin-index`.
+shakmaty = "0.27.1"
+memmap2 = "0.9"
+rayon = "1.9"
+crc32fast = "1.4"

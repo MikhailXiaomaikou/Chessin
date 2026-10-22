@@ -3,6 +3,8 @@
 const COMMANDS: &[&str] = &[
     "chessin_ping",
     "cbh_to_pgn",
+    "cbh_detect_format",
+    "twocbh_to_pgn",
     "store_get",
     "store_set",
     "store_delete",
@@ -11,7 +13,9 @@ const COMMANDS: &[&str] = &[
     "doc_list",
     "doc_delete",
     "doc_versions",
+    "doc_version_get",
     "doc_restore_version",
+    "backup_library",
     "job_upsert",
     "job_list",
     "job_delete",
@@ -26,6 +30,12 @@ const COMMANDS: &[&str] = &[
     "card_stats",
     "move_to_trash",
     "scan_chessbase",
+    "index_build",
+    "index_status",
+    "index_delete",
+    "index_position",
+    "index_pawn_candidates",
+    "index_games",
 ];
 
 fn main() {

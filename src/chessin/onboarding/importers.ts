@@ -203,10 +203,11 @@ export async function importAccountGames(
 // Local files (same calls as AddDatabase.tsx `convertDB`)
 // ---------------------------------------------------------------------------
 
-export type ImportFileKind = "pgn" | "cbh";
+export type ImportFileKind = "pgn" | "cbh" | "2cbh";
 
 export function classifyImportFile(path: string): ImportFileKind | null {
     const lower = path.toLowerCase();
+    if (lower.endsWith(".2cbh")) return "2cbh";
     if (lower.endsWith(".cbh")) return "cbh";
     if (/\.pgn(\.(zst|bz2))?$/.test(lower)) return "pgn";
     return null;
@@ -214,7 +215,18 @@ export function classifyImportFile(path: string): ImportFileKind | null {
 
 /** Title suggestion, as AddDatabase.tsx derives it from the file name. */
 export function titleFromFileName(fileName: string): string {
-    return capitalize(fileName.replaceAll(/[_-]/g, " ").replace(/\.(pgn(\.(zst|bz2))?|cbh)$/i, ""));
+    return capitalize(
+        fileName.replaceAll(/[_-]/g, " ").replace(/\.(pgn(\.(zst|bz2))?|2?cbh)$/i, ""),
+    );
+}
+
+/**
+ * `twocbh_to_pgn` (ChessBase 17+ databases) lands with the 2CBH reader; a
+ * build whose bindings predate it lists `.2cbh` databases without importing
+ * them. Looked up at call time, like the scan command below.
+ */
+export function isTwoCbhImportAvailable(): boolean {
+    return typeof (chessinCommands as Record<string, unknown>).twocbhToPgn === "function";
 }
 
 /** AddDatabase.tsx rejects a title that is already used; here we de-duplicate instead. */
@@ -249,9 +261,12 @@ type CbhModule = {
 const cbhModules = import.meta.glob<CbhModule>("../import/cbh.ts");
 
 export class CbhUnavailableError extends Error {
-    constructor() {
-        super("ChessBase (.cbh) import is not available in this build");
+    readonly format: "cbh" | "2cbh";
+
+    constructor(format: "cbh" | "2cbh" = "cbh") {
+        super(`ChessBase (.${format}) import is not available in this build`);
         this.name = "CbhUnavailableError";
+        this.format = format;
     }
 }
 
@@ -269,8 +284,8 @@ async function loadCbhModule(): Promise<CbhModule> {
 }
 
 /**
- * Imports one `.pgn` / `.pgn.zst` / `.pgn.bz2` / `.cbh` file into a new
- * database under the databases directory.
+ * Imports one `.pgn` / `.pgn.zst` / `.pgn.bz2` / `.cbh` / `.2cbh` file into a
+ * new database under the databases directory.
  */
 export async function importLocalFile(
     path: string,
@@ -286,7 +301,8 @@ export async function importLocalFile(
 
     // Loaded before touching the conversion state so an unavailable module
     // fails fast without a stray "in progress" banner.
-    const cbh = kind === "cbh" ? await loadCbhModule() : null;
+    const cbh = kind === "cbh" || kind === "2cbh" ? await loadCbhModule() : null;
+    if (kind === "2cbh" && !isTwoCbhImportAvailable()) throw new CbhUnavailableError("2cbh");
 
     setConversionState((prev) => ({
         ...prev,
@@ -317,7 +333,7 @@ export async function importLocalFile(
 export type ChessBaseDb = {
     path: string;
     name: string;
-    /** `cbh` (CB v1, importable) or `2cbh` (CB'26, not importable yet). */
+    /** `cbh` (CB 6–16) or `2cbh` (CB 17+, importable when the build has `twocbh_to_pgn`). */
     format: "cbh" | "2cbh" | (string & {});
     games: number | null;
     size_bytes: number;
@@ -382,9 +398,15 @@ export async function scanChessBaseDatabases(): Promise<ChessBaseDb[] | null> {
     });
 }
 
-/** Only CBH v1 databases go through `importLocalFile` → `importCbhFile`. */
+/**
+ * Which scanned databases go through `importLocalFile` → `importCbhFile`:
+ * every `.cbh`, and `.2cbh` when this build has the `twocbh_to_pgn` command.
+ */
 export function isImportableChessBaseDb(db: ChessBaseDb): boolean {
-    return db.format === "cbh" && classifyImportFile(db.path) === "cbh";
+    const kind = classifyImportFile(db.path);
+    if (db.format === "cbh") return kind === "cbh";
+    if (db.format === "2cbh") return kind === "2cbh" && isTwoCbhImportAvailable();
+    return false;
 }
 
 /** Most recent game (by date) of a database, or null when it is empty. */

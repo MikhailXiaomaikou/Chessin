@@ -265,26 +265,28 @@ function BoardAnalysis() {
             }}
           >
             <Tabs.List grow>
-              {isRepertoire && (
-                <Tabs.Tab value="practice" leftSection={<IconTargetArrow size="1rem" />}>
-                  {t("Board.Tabs.Practice")}
-                </Tabs.Tab>
-              )}
+              {/* Chessin (S3-6): IA-1 context dock — 探索器 / 引擎 / 讲解 / 笔记 / 资料 / 训练.
+                  Labels and order only; the `value`s (and the hotkeys above) are unchanged. */}
+              <Tabs.Tab value="database" leftSection={<IconDatabase size="1rem" />}>
+                {t("Shell.Dock.Explorer")}
+              </Tabs.Tab>
               <Tabs.Tab value="analysis" leftSection={<IconZoomCheck size="1rem" />}>
-                {t("Board.Tabs.Analysis")}
+                {t("Shell.Dock.Engine")}
               </Tabs.Tab>
               <Tabs.Tab value="review" leftSection={<IconReportAnalytics size="1rem" />}>
-                {t("Review.Tab")}
-              </Tabs.Tab>
-              <Tabs.Tab value="database" leftSection={<IconDatabase size="1rem" />}>
-                {t("Board.Tabs.Database")}
+                {t("Shell.Dock.Explain")}
               </Tabs.Tab>
               <Tabs.Tab value="annotate" leftSection={<IconNotes size="1rem" />}>
-                {t("Board.Tabs.Annotate")}
+                {t("Shell.Dock.Notes")}
               </Tabs.Tab>
               <Tabs.Tab value="info" leftSection={<IconInfoCircle size="1rem" />}>
-                {t("Board.Tabs.Info")}
+                {t("Shell.Dock.Info")}
               </Tabs.Tab>
+              {isRepertoire && (
+                <Tabs.Tab value="practice" leftSection={<IconTargetArrow size="1rem" />}>
+                  {t("Shell.Dock.Practice")}
+                </Tabs.Tab>
+              )}
             </Tabs.List>
             {isRepertoire && (
               <Tabs.Panel value="practice" flex={1} style={{ overflowY: "hidden" }}>

@@ -16,6 +16,8 @@ tauri-plugin = { workspace = true, features = ["build"] }
 [dependencies]
 chessin-cb = { workspace = true }
 chessin-core = { workspace = true }
+chessin-index = { workspace = true }
+shakmaty = { workspace = true }
 tauri = { workspace = true }
 specta = { workspace = true }
 specta-typescript = { workspace = true }
@@ -27,3 +29,4 @@ trash = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
+rusqlite = { workspace = true }

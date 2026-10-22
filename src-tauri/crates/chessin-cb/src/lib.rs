@@ -1,9 +1,13 @@
 //! Clean-room, read-only reader for ChessBase CBH databases (the "version 1"
-//! format written by ChessBase 6 to 16) that emits PGN.
+//! format written by ChessBase 6 to 16) that emits PGN. The [`twocbh`] module
+//! reads the 2CBH format of ChessBase 17 and later the same way;
+//! [`detect_format`] tells the two apart and [`convert_database_to_pgn`]
+//! converts either.
 //!
 //! The on-disk layout follows the public description in Jimmy Mårdell's
-//! Morphy format documents (`format/v1/*.md`); no code was taken from any
-//! ChessBase reader. See `docs/chessbase-teardown.md` §4 for a summary.
+//! Morphy format documents (`format/v1/*.md`, `format/v2/*.md`); no code was
+//! taken from any ChessBase reader. See `docs/chessbase-teardown.md` §4 for a
+//! summary.
 //!
 //! ```no_run
 //! let mut db = chessin_cb::read_database("games.cbh").unwrap();
@@ -32,6 +36,7 @@ pub mod moves;
 mod pgn;
 mod tables;
 pub mod text;
+pub mod twocbh;
 
 #[cfg(test)]
 mod roundtrip_tests;
@@ -50,9 +55,13 @@ use text::TextDecoder;
 
 pub use header::CbDate;
 pub use pgn::write_pgn;
+pub use twocbh::{
+    convert_2cbh_to_pgn, convert_database_to_pgn, detect_format, read_2cbh_database, DbFormat,
+};
 
-/// Errors of the reader. [`Error::Deleted`], [`Error::GuidingText`] and
-/// [`Error::Game`] concern one game and leave the database usable.
+/// Errors of the reader. [`Error::Deleted`], [`Error::GuidingText`],
+/// [`Error::Analysis`] and [`Error::Game`] concern one game and leave the
+/// database usable.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("cannot read {path}: {source}")]
@@ -65,6 +74,9 @@ pub enum Error {
     Format { path: PathBuf, message: String },
     #[error("game {id} is a guiding text, not a game")]
     GuidingText { id: u32 },
+    /// A 2CBH "analysis" record: an opening line filed among the games.
+    #[error("game {id} is an analysis, not a game")]
+    Analysis { id: u32 },
     #[error("game {id} is marked as deleted")]
     Deleted { id: u32 },
     #[error("game {id}: {reason}")]
@@ -122,6 +134,11 @@ pub struct Headers {
     pub chess960_position: Option<u16>,
     /// The game was decided by forfeit.
     pub forfeit: bool,
+    /// Team names (2CBH only).
+    pub white_team: Option<String>,
+    pub black_team: Option<String>,
+    /// Board number in a team event (2CBH only).
+    pub board: Option<u16>,
 }
 
 /// A decoded game.
@@ -163,7 +180,7 @@ pub struct CbhDatabase {
 
 /// Finds a sibling file of the `.cbh`, trying the extension in lower and
 /// upper case. Returns the lower-case path when neither exists.
-fn sibling(cbh: &Path, ext: &str) -> PathBuf {
+pub(crate) fn sibling(cbh: &Path, ext: &str) -> PathBuf {
     let lower = cbh.with_extension(ext);
     if lower.exists() {
         return lower;
@@ -458,6 +475,9 @@ impl CbhDatabase {
             time_control: None,
             chess960_position,
             forfeit: rec.result.is_forfeit(),
+            white_team: None,
+            black_team: None,
+            board: None,
         }
     }
 
@@ -486,7 +506,10 @@ impl CbhDatabase {
             match self.read_annotation_record(id, rec.annotations_offset) {
                 Ok(Some(raw)) => {
                     game.has_annotations = !raw.is_empty();
-                    apply_annotations(&mut game, raw, &self.decoder);
+                    let dec = &self.decoder;
+                    apply_annotations(&mut game, raw, &|kind, data| {
+                        annotations::decode(kind, data, dec)
+                    });
                 }
                 Ok(None) => {}
                 Err(e) => game
@@ -503,7 +526,7 @@ impl CbhDatabase {
     }
 }
 
-fn last_mainline_node(nodes: &[Node]) -> Option<usize> {
+pub(crate) fn last_mainline_node(nodes: &[Node]) -> Option<usize> {
     let mut cur = 0;
     while let Some(&next) = nodes.get(cur)?.children.first() {
         cur = next;
@@ -539,8 +562,14 @@ fn apply_evaluations(game: &mut Game, evals: &[Option<String>]) {
     }
 }
 
-/// Attaches the annotations of a game to its nodes.
-fn apply_annotations(game: &mut Game, raw: Vec<RawAnnotation>, dec: &TextDecoder) {
+/// Attaches the annotations of a game to its nodes. Positions count the
+/// nodes in stream order from 0 (node `position + 1`); −1 is the game as a
+/// whole. `decode` interprets one annotation's bytes for the format at hand.
+pub(crate) fn apply_annotations(
+    game: &mut Game,
+    raw: Vec<RawAnnotation>,
+    decode: &dyn Fn(u8, &[u8]) -> Payload,
+) {
     let mut out_of_range = 0u32;
     for a in raw {
         let target = if a.position < 0 {
@@ -553,7 +582,7 @@ fn apply_annotations(game: &mut Game, raw: Vec<RawAnnotation>, dec: &TextDecoder
             }
             Some(idx)
         };
-        match annotations::decode(a.kind, &a.data, dec) {
+        match decode(a.kind, &a.data) {
             Payload::Unsupported(kind) => game.unsupported_annotations.push(kind),
             Payload::TimeControl(tc) => game.headers.time_control = Some(tc),
             Payload::Evaluations(evals) => apply_evaluations(game, &evals),
@@ -635,7 +664,103 @@ impl Warnings {
     }
 }
 
-/// Converts a whole database to one PGN file.
+/// Writes the games of either format to a PGN file and keeps the counts for
+/// the report.
+pub(crate) struct Exporter {
+    report: CbhImportReport,
+    warnings: Warnings,
+    unsupported: BTreeMap<String, u32>,
+    deleted: u32,
+    texts: u32,
+    analyses: u32,
+}
+
+impl Exporter {
+    pub(crate) fn new(games: u32, encoding: &str, db_warnings: &[String]) -> Exporter {
+        Exporter {
+            report: CbhImportReport {
+                games,
+                encoding: encoding.to_string(),
+                ..CbhImportReport::default()
+            },
+            warnings: Warnings {
+                items: db_warnings.to_vec(),
+                dropped: 0,
+            },
+            unsupported: BTreeMap::new(),
+            deleted: 0,
+            texts: 0,
+            analyses: 0,
+        }
+    }
+
+    /// Writes one game, or counts why it is skipped. Errors that concern the
+    /// whole database are passed on.
+    pub(crate) fn write<W: Write>(
+        &mut self,
+        w: &mut W,
+        out_path: &Path,
+        game: Result<Game, Error>,
+    ) -> Result<(), Error> {
+        match game {
+            Ok(game) => {
+                write_pgn(&game, w).map_err(|e| io_err(out_path, e))?;
+                self.report.exported += 1;
+                if game.has_annotations {
+                    self.report.annotated += 1;
+                }
+                for kind in game.unsupported_annotations {
+                    *self.unsupported.entry(kind).or_default() += 1;
+                }
+                for warning in game.warnings {
+                    self.warnings.push(warning);
+                }
+            }
+            Err(Error::Deleted { .. }) => {
+                self.report.skipped += 1;
+                self.deleted += 1;
+            }
+            Err(Error::GuidingText { .. }) => {
+                self.report.skipped += 1;
+                self.texts += 1;
+            }
+            Err(Error::Analysis { .. }) => {
+                self.report.skipped += 1;
+                self.analyses += 1;
+            }
+            Err(Error::Game { id, reason }) => {
+                self.report.skipped += 1;
+                self.warnings.push(format!("game {id} skipped: {reason}"));
+            }
+            Err(e) => return Err(e),
+        }
+        Ok(())
+    }
+
+    pub(crate) fn finish(mut self) -> CbhImportReport {
+        if self.deleted > 0 {
+            self.warnings
+                .push(format!("{} deleted game(s) skipped", self.deleted));
+        }
+        if self.texts > 0 {
+            self.warnings
+                .push(format!("{} guiding text(s) skipped", self.texts));
+        }
+        if self.analyses > 0 {
+            self.warnings
+                .push(format!("{} analysis record(s) skipped", self.analyses));
+        }
+        self.report.unsupported = self
+            .unsupported
+            .into_iter()
+            .map(|(kind, count)| UnsupportedAnnotation { kind, count })
+            .collect();
+        self.report.warnings = self.warnings.finish();
+        self.report
+    }
+}
+
+/// Converts a whole CBH database to one PGN file.
 pub fn convert_to_pgn(
     cbh_path: impl AsRef<Path>,
     out_path: impl AsRef<Path>,
@@ -644,61 +769,12 @@ pub fn convert_to_pgn(
     let mut db = read_database(cbh_path)?;
     let out = File::create(out_path).map_err(|e| io_err(out_path, e))?;
     let mut w = BufWriter::new(out);
-    let mut report = CbhImportReport {
-        games: db.game_count(),
-        encoding: db.encoding().to_string(),
-        ..CbhImportReport::default()
-    };
-    let mut warnings = Warnings {
-        items: db.warnings().to_vec(),
-        dropped: 0,
-    };
-    let mut unsupported: BTreeMap<String, u32> = BTreeMap::new();
-    let mut deleted = 0u32;
-    let mut texts = 0u32;
+    let mut exporter = Exporter::new(db.game_count(), db.encoding(), db.warnings());
     for game in db.games() {
-        match game {
-            Ok(game) => {
-                write_pgn(&game, &mut w).map_err(|e| io_err(out_path, e))?;
-                report.exported += 1;
-                if game.has_annotations {
-                    report.annotated += 1;
-                }
-                for kind in game.unsupported_annotations {
-                    *unsupported.entry(kind).or_default() += 1;
-                }
-                for warning in game.warnings {
-                    warnings.push(warning);
-                }
-            }
-            Err(Error::Deleted { .. }) => {
-                report.skipped += 1;
-                deleted += 1;
-            }
-            Err(Error::GuidingText { .. }) => {
-                report.skipped += 1;
-                texts += 1;
-            }
-            Err(Error::Game { id, reason }) => {
-                report.skipped += 1;
-                warnings.push(format!("game {id} skipped: {reason}"));
-            }
-            Err(e) => return Err(e),
-        }
+        exporter.write(&mut w, out_path, game)?;
     }
     w.flush().map_err(|e| io_err(out_path, e))?;
-    if deleted > 0 {
-        warnings.push(format!("{deleted} deleted game(s) skipped"));
-    }
-    if texts > 0 {
-        warnings.push(format!("{texts} guiding text(s) skipped"));
-    }
-    report.unsupported = unsupported
-        .into_iter()
-        .map(|(kind, count)| UnsupportedAnnotation { kind, count })
-        .collect();
-    report.warnings = warnings.finish();
-    Ok(report)
+    Ok(exporter.finish())
 }
 
 #[cfg(test)]
@@ -779,7 +855,9 @@ mod tests {
                 data: vec![0, 3, 0, 1, 0, 10, 0, 1, 0, 20, 0xff, 0, 0, 0],
             },
         ];
-        apply_annotations(&mut game, raw, &dec);
+        apply_annotations(&mut game, raw, &|kind, data| {
+            annotations::decode(kind, data, &dec)
+        });
         assert_eq!(game.game_comment.as_deref(), Some("whole game"));
         assert_eq!(game.game_commands, vec!["[%clk 0:01:00]"]);
         assert_eq!(game.nodes[1].comment_before.as_deref(), Some("before"));

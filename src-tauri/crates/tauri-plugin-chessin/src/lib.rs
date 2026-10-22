@@ -8,25 +8,37 @@
 //! permissions are `chessin:default` / `chessin:allow-<command>`.
 //!
 //! The library store commands (`store_*`, `doc_*`, `move_to_trash`, `job_*`,
-//! `eval_cache_*`, `card_*`) share one SQLite connection to
+//! `eval_cache_*`, `card_*`, `backup_library`) share one SQLite connection to
 //! `<app_data_dir>/chessin/library.sqlite`, held in [`LibraryState`] and used
 //! from a blocking thread.
+//!
+//! The position-index commands (`index_*`) build and query the `.cpi`
+//! sidecar of a game database (see `chessin_index`); the open indexes are
+//! cached in [`IndexState`] and `index_build` reports through the
+//! [`INDEX_PROGRESS_EVENT`] event.
 
+mod index;
 mod library;
 mod scan;
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use tauri::{
     plugin::{Builder as PluginBuilder, TauriPlugin},
-    Manager, Runtime, State,
+    AppHandle, Emitter, Manager, Runtime, State,
 };
 
-use chessin_core::store::NewDocument;
+use chessin_core::store::{now_ms, NewDocument};
 
 pub use chessin_cb::{CbhImportReport, UnsupportedAnnotation};
 pub use chessin_core::store::{
     CachedEval, CardRecord, CardStats, Document, DocumentMeta, JobRecord, VersionMeta,
+};
+pub use chessin_index::{IndexGame, IndexStats};
+pub use index::{
+    IndexFilter, IndexGameRef, IndexMoveStats, IndexPositionResult, IndexProgress, IndexState,
+    INDEX_PROGRESS_EVENT,
 };
 pub use library::LibraryState;
 pub use scan::ChessBaseDb;
@@ -57,6 +69,35 @@ fn chessin_ping() -> String {
 async fn cbh_to_pgn(cbh_path: String, out_pgn_path: String) -> Result<CbhImportReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
         chessin_cb::convert_to_pgn(&cbh_path, &out_pgn_path).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Tells a ChessBase `.cbh` database (ChessBase 6 to 16) from a `.2cbh` one
+/// (ChessBase 17 and later) by the file's header, falling back to the
+/// extension when the header is unreadable: `"cbh"`, `"2cbh"` or `"unknown"`
+/// when it is neither. A file that cannot be opened is an error.
+#[tauri::command]
+#[specta::specta]
+async fn cbh_detect_format(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || match chessin_cb::detect_format(&path) {
+        Ok(format) => Ok(format.as_str().to_string()),
+        Err(chessin_cb::Error::Format { .. }) => Ok("unknown".to_string()),
+        Err(e) => Err(e.to_string()),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Converts a ChessBase `.2cbh` database (ChessBase 17 and later; the sibling
+/// `.2cbg`, `.2cba` and `.2lid` files are found next to it) into one PGN file
+/// at `out_pgn_path`, which the frontend then imports with `convert_pgn`.
+#[tauri::command]
+#[specta::specta]
+async fn twocbh_to_pgn(path: String, out_pgn_path: String) -> Result<CbhImportReport, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        chessin_cb::convert_2cbh_to_pgn(&path, &out_pgn_path).map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -157,6 +198,20 @@ async fn doc_versions(
     state.run(move |lib| lib.doc_versions(&id)).await
 }
 
+/// The stored payload of one version of a document (see `doc_versions`);
+/// `None` when the document has no version with that id.
+#[tauri::command]
+#[specta::specta]
+async fn doc_version_get(
+    id: String,
+    version_id: i64,
+    state: State<'_, LibraryState>,
+) -> Result<Option<String>, String> {
+    state
+        .run(move |lib| lib.doc_version_get(&id, version_id))
+        .await
+}
+
 /// Makes `version_id` the document's current payload; the state before the
 /// restore stays in the history.
 #[tauri::command]
@@ -168,6 +223,27 @@ async fn doc_restore_version(
 ) -> Result<(), String> {
     state
         .run(move |lib| lib.doc_restore_version(&id, version_id))
+        .await
+}
+
+// ----- library store: backups ---------------------------------------------
+
+/// How many backup files `backup_library` keeps, the new one included.
+const BACKUP_KEEP: usize = 7;
+
+/// Writes a snapshot of the library (`VACUUM INTO`) to
+/// `<app_data_dir>/chessin/backups/library-<YYYYMMDD-HHMMSS>.sqlite` (UTC),
+/// deletes the oldest backups beyond the seven newest and returns the path
+/// of the new file.
+#[tauri::command]
+#[specta::specta]
+async fn backup_library(state: State<'_, LibraryState>) -> Result<String, String> {
+    let dir = state.backup_dir();
+    state
+        .run(move |lib| {
+            lib.backup_to(&dir, now_ms(), BACKUP_KEEP)
+                .map(|path| path.to_string_lossy().into_owned())
+        })
         .await
 }
 
@@ -340,12 +416,134 @@ async fn scan_chessbase(dirs: Option<Vec<String>>) -> Result<Vec<ChessBaseDb>, S
     .map_err(|e| e.to_string())
 }
 
+// ----- position index ------------------------------------------------------
+
+/// Least time between two progress events of one build.
+const INDEX_PROGRESS_INTERVAL: Duration = Duration::from_millis(200);
+
+/// Builds the position index (`<db>.db3.cpi`) of a game database, or brings
+/// an existing one up to date with the games added since (a full rebuild
+/// when `max_ply`, 40 by default, differs from the index's). Emits
+/// `chessin://index-progress` ([`IndexProgress`], `progress` 0–1) while it
+/// runs and once more with `finished: true` at the end, success or not. A
+/// second build of the same database while one runs is an error.
+#[tauri::command]
+#[specta::specta]
+async fn index_build<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, IndexState>,
+    db_path: String,
+    max_ply: Option<u32>,
+) -> Result<IndexStats, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let emit = |progress: f64, finished: bool| {
+            let _ = app.emit(
+                INDEX_PROGRESS_EVENT,
+                IndexProgress {
+                    db_path: db_path.clone(),
+                    progress,
+                    finished,
+                },
+            );
+        };
+        let mut last = None::<Instant>;
+        let result = state.build(&db_path, max_ply, |progress| {
+            if last.is_none_or(|t| t.elapsed() >= INDEX_PROGRESS_INTERVAL) {
+                emit(progress, false);
+                last = Some(Instant::now());
+            }
+        });
+        emit(1.0, true);
+        result
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The stats of the database's position index; `None` when it has no
+/// usable index (missing or corrupt: build it).
+#[tauri::command]
+#[specta::specta]
+async fn index_status(
+    db_path: String,
+    state: State<'_, IndexState>,
+) -> Result<Option<IndexStats>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || Ok(state.status(&db_path)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Removes the database's position index (cancelling a running build);
+/// a missing index is not an error.
+#[tauri::command]
+#[specta::specta]
+async fn index_delete(db_path: String, state: State<'_, IndexState>) -> Result<(), String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.delete(&db_path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The moves played from `fen` by the indexed games that pass `filter`,
+/// most played first, with up to `limit` of those games (highest rated
+/// first). The result is empty past the index depth (`ply` tells); an
+/// error when the database has no index.
+#[tauri::command]
+#[specta::specta]
+async fn index_position(
+    db_path: String,
+    fen: String,
+    filter: IndexFilter,
+    limit: u32,
+    state: State<'_, IndexState>,
+) -> Result<IndexPositionResult, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.position(&db_path, &fen, &filter, limit))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Up to `limit` ids of indexed games that may have had the pawn structure
+/// of `fen` at ply 10, 20, 30, 40, 50 or 60: a bloom pre-filter with false
+/// positives, to be verified by replaying the candidates.
+#[tauri::command]
+#[specta::specta]
+async fn index_pawn_candidates(
+    db_path: String,
+    fen: String,
+    limit: u32,
+    state: State<'_, IndexState>,
+) -> Result<Vec<u32>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || state.pawn_candidates(&db_path, &fen, limit))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The rows of up to 500 games by id, in the requested order (ids that do
+/// not exist are skipped), read straight from the database with the main
+/// line rendered as SAN movetext: for the explorer's sample list, without
+/// the OFFSET walk of `get_games`. The database is opened read-only.
+#[tauri::command]
+#[specta::specta]
+async fn index_games(db_path: String, ids: Vec<u32>) -> Result<Vec<IndexGame>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        chessin_index::load_games(Path::new(&db_path), &ids).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 fn specta_builder<R: Runtime>() -> tauri_specta::Builder<R> {
     tauri_specta::Builder::<R>::new()
         .plugin_name(PLUGIN_NAME)
         .commands(tauri_specta::collect_commands![
             chessin_ping,
             cbh_to_pgn,
+            cbh_detect_format,
+            twocbh_to_pgn,
             store_get,
             store_set,
             store_delete,
@@ -354,7 +552,9 @@ fn specta_builder<R: Runtime>() -> tauri_specta::Builder<R> {
             doc_list,
             doc_delete,
             doc_versions,
+            doc_version_get,
             doc_restore_version,
+            backup_library,
             job_upsert,
             job_list,
             job_delete,
@@ -369,7 +569,19 @@ fn specta_builder<R: Runtime>() -> tauri_specta::Builder<R> {
             card_stats,
             move_to_trash,
             scan_chessbase,
+            // The turbofish is only for specta's type collection (the handle
+            // is not part of the TS signature); `generate_handler!` drops it.
+            index_build::<tauri::Wry>,
+            index_status,
+            index_delete,
+            index_position,
+            index_pawn_candidates,
+            index_games,
         ])
+        // The payload of `chessin://index-progress`, which is emitted with
+        // `app.emit` rather than as a tauri-specta event (those are named
+        // after their struct), so the type is exported on its own.
+        .typ::<IndexProgress>()
 }
 
 #[cfg(any(debug_assertions, test))]
@@ -398,6 +610,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             app.manage(LibraryState::new(
                 data_dir.join("chessin").join("library.sqlite"),
             ));
+            app.manage(IndexState::new());
             Ok(())
         })
         .build()
@@ -420,6 +633,42 @@ mod tests {
         ))
         .unwrap_err();
         assert!(err.contains("games.cbh"), "{err}");
+    }
+
+    #[test]
+    fn twocbh_to_pgn_reports_a_missing_database() {
+        let err = tauri::async_runtime::block_on(twocbh_to_pgn(
+            "/nonexistent/games.2cbh".to_string(),
+            "/nonexistent/out.pgn".to_string(),
+        ))
+        .unwrap_err();
+        assert!(err.contains("games.2cbh"), "{err}");
+    }
+
+    #[test]
+    fn cbh_detect_format_tells_the_two_formats_apart() {
+        let dir = tempfile::tempdir().unwrap();
+        // CBH: record size 46 at 0x03 (big-endian), version 1 at 0x05.
+        let mut v1 = vec![0u8; 46];
+        v1[3..5].copy_from_slice(&46u16.to_be_bytes());
+        v1[5] = 1;
+        let v1_path = dir.path().join("old.cbh");
+        std::fs::write(&v1_path, &v1).unwrap();
+        // 2CBH: record size 192 at 0x0a (little-endian), version 5 at 0x0d.
+        let mut v2 = vec![0u8; 192];
+        v2[0x0a..0x0c].copy_from_slice(&192u16.to_le_bytes());
+        v2[0x0d] = 5;
+        let v2_path = dir.path().join("new.2cbh");
+        std::fs::write(&v2_path, &v2).unwrap();
+        let junk = dir.path().join("junk.txt");
+        std::fs::write(&junk, b"hello").unwrap();
+        let detect = |p: &Path| {
+            tauri::async_runtime::block_on(cbh_detect_format(p.to_string_lossy().into_owned()))
+        };
+        assert_eq!(detect(&v1_path).unwrap(), "cbh");
+        assert_eq!(detect(&v2_path).unwrap(), "2cbh");
+        assert_eq!(detect(&junk).unwrap(), "unknown");
+        assert!(detect(&dir.path().join("missing.cbh")).is_err());
     }
 
     /// The command bodies are one-liners over `LibraryState`; this covers the
@@ -576,6 +825,69 @@ mod tests {
                 state.run(|lib| lib.card_stats(600)).await.unwrap(),
                 CardStats::default()
             );
+        });
+    }
+
+    /// `doc_version_get` and `backup_library` are one-liners over
+    /// `LibraryState::run`; this drives both through the state the way the
+    /// commands do, the backup landing in `backup_dir()`.
+    #[test]
+    fn version_payload_and_backup_run_through_the_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = LibraryState::new(dir.path().join("chessin").join("library.sqlite"));
+        tauri::async_runtime::block_on(async {
+            state
+                .run(|lib| {
+                    lib.doc_put(
+                        NewDocument {
+                            id: "t",
+                            kind: "game",
+                            title: "T",
+                            origin: None,
+                            data: "{\"a\":1}",
+                        },
+                        Some("c"),
+                    )
+                })
+                .await
+                .unwrap();
+            let versions = state.run(|lib| lib.doc_versions("t")).await.unwrap();
+            let version_id = versions[0].id;
+            let data = state
+                .run(move |lib| lib.doc_version_get("t", version_id))
+                .await
+                .unwrap();
+            assert_eq!(data.as_deref(), Some("{\"a\":1}"));
+            let missing = state
+                .run(|lib| lib.doc_version_get("t", 9_999))
+                .await
+                .unwrap();
+            assert_eq!(missing, None);
+
+            let backup_dir = state.backup_dir();
+            let path = state
+                .run(move |lib| {
+                    lib.backup_to(&backup_dir, now_ms(), BACKUP_KEEP)
+                        .map(|path| path.to_string_lossy().into_owned())
+                })
+                .await
+                .unwrap();
+            let path = PathBuf::from(path);
+            assert_eq!(path.parent(), Some(state.backup_dir().as_path()));
+            let name = path.file_name().unwrap().to_string_lossy();
+            assert!(
+                name.starts_with("library-") && name.ends_with(".sqlite"),
+                "{name}"
+            );
+            let copy = rusqlite::Connection::open_with_flags(
+                &path,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .unwrap();
+            let docs: i64 = copy
+                .query_row("SELECT count(*) FROM documents", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(docs, 1);
         });
     }
 

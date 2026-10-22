@@ -1,0 +1,101 @@
+.nav {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
+  padding-top: 0.25rem;
+}
+
+.bottom {
+  flex: none;
+  border-top: 1px solid var(--mantine-color-default-border);
+  padding-bottom: 0.25rem;
+}
+
+/* One row: icon + label, or icon only when the nav is collapsed. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  background: transparent;
+  color: var(--mantine-color-gray-7);
+  font: inherit;
+  font-size: var(--mantine-font-size-sm);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  cursor: pointer;
+}
+
+[data-mantine-color-scheme="dark"] .row {
+  color: var(--mantine-color-dark-0);
+}
+
+.row:hover {
+  color: var(--mantine-color-dark-5);
+  background: var(--mantine-color-gray-0);
+}
+
+[data-mantine-color-scheme="dark"] .row:hover {
+  color: var(--mantine-color-gray-0);
+  background: var(--mantine-color-dark-6);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: -2px;
+}
+
+.active {
+  border-left-color: var(--mantine-primary-color-filled);
+  color: var(--mantine-color-dark-5);
+  font-weight: 500;
+}
+
+[data-mantine-color-scheme="dark"] .active {
+  color: var(--mantine-color-white);
+}
+
+/* 文件 sits under the 棋谱库 group. */
+.child {
+  height: 2.1rem;
+  padding-left: 1.65rem;
+  font-size: var(--mantine-font-size-xs);
+}
+
+.collapsed {
+  justify-content: center;
+  height: 3rem;
+  padding: 0;
+}
+
+.child.collapsed {
+  height: 2.25rem;
+}
+
+.icon {
+  flex: none;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hint {
+  opacity: 0.8;
+}

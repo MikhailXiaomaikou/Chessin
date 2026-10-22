@@ -812,6 +812,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "chessin-index"
+version = "0.1.0"
+dependencies = [
+ "crc32fast",
+ "memmap2",
+ "rayon",
+ "rusqlite",
+ "serde",
+ "shakmaty",
+ "specta",
+ "tempfile",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5921,9 +5936,12 @@ version = "0.1.0"
 dependencies = [
  "chessin-cb",
  "chessin-core",
+ "chessin-index",
  "dirs",
+ "rusqlite",
  "serde",
  "serde_json",
+ "shakmaty",
  "specta",
  "specta-typescript",
  "tauri",

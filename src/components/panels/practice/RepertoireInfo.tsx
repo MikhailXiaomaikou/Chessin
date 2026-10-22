@@ -27,6 +27,7 @@ import { useAtomValue } from "jotai";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
+import RepertoireCheck from "@/chessin/repertoire/RepertoireCheck";
 import { tabLocalPathAtomFamily } from "@/chessin/sources/sources";
 import { TreeStateContext } from "@/components/common/TreeStateContext";
 import { coverageMinGamesAtom, currentTabAtom } from "@/state/atoms";
@@ -360,6 +361,8 @@ function RepertoireInfo() {
           minGames={minGames}
         />
       )}
+      {/* Chessin (S3-5): coverage / gaps / conflicts / cold shelf. */}
+      <RepertoireCheck />
       <Divider pb="sm" />
       <TreeStatsBar stats={stats} t={t} />
     </Stack>

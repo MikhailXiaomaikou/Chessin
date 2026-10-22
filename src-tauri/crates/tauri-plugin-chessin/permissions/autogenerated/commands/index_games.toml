@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-index-games"
+description = "Enables the index_games command without any pre-configured scope."
+commands.allow = ["index_games"]
+
+[[permission]]
+identifier = "deny-index-games"
+description = "Denies the index_games command without any pre-configured scope."
+commands.deny = ["index_games"]

@@ -30,6 +30,7 @@ import { useAtom, useSetAtom } from "jotai";
 import { RESET } from "jotai/utils";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import BackupSettings from "@/chessin/history/BackupSettings";
 import { keybindLabel } from "@/chessin/keymap/labels";
 import { MigrateSettingsButton } from "@/chessin/migrate/MigrateModal";
 import {
@@ -669,6 +670,15 @@ export default function Page() {
         description: t("Migrate.Settings.Desc"),
         keywords: ["migrate", "en croissant", "import", "engines", "databases", "迁移", "搬家"],
         render: () => <MigrateSettingsButton />,
+      },
+      // Chessin: library backups (S3-7): last backup time, "立即备份", daily toggle
+      {
+        id: "library-backup",
+        category: "directories",
+        title: t("Backup.Settings.Title"),
+        description: t("Backup.Settings.Desc"),
+        keywords: ["backup", "library", "sqlite", "备份", "棋谱库"],
+        render: () => <BackupSettings />,
       },
     ],
     [

@@ -4,33 +4,62 @@ import { remove } from "@tauri-apps/plugin-fs";
 import { warn } from "@tauri-apps/plugin-log";
 import i18n from "i18next";
 import { commands as appCommands } from "@/bindings";
-import { type CbhImportReport, commands } from "@/chessin/bindings";
+import { type CbhImportReport, commands, type Result } from "@/chessin/bindings";
 import { getDatabasesDir } from "@/utils/directories";
 import { unwrap } from "@/utils/unwrap";
 
 export type { CbhImportReport };
 
-/** Whether a path is a ChessBase header file (`.cbh`). */
+/** Whether a path is a ChessBase header file: `.cbh` (ChessBase 6–16) or `.2cbh` (17+). */
 export function isCbhPath(path: string): boolean {
-    return /\.cbh$/i.test(path);
+    return /\.2?cbh$/i.test(path);
 }
 
-/** A database title derived from the `.cbh` file name. */
+/** Whether a path is a ChessBase 17+ header file (`.2cbh`). */
+export function isTwoCbhPath(path: string): boolean {
+    return /\.2cbh$/i.test(path);
+}
+
+type TwoCbhCommand = (path: string, outPgnPath: string) => Promise<Result<CbhImportReport, string>>;
+
+/**
+ * The `twocbh_to_pgn` plugin command, looked up at call time so a build whose
+ * bindings predate it still compiles and simply reports `.2cbh` as unavailable.
+ */
+function getTwoCbhCommand(): TwoCbhCommand | null {
+    const command = (commands as Record<string, unknown>).twocbhToPgn;
+    return typeof command === "function" ? (command as TwoCbhCommand) : null;
+}
+
+/** True when this build can import `.2cbh` databases. */
+export function isTwoCbhImportAvailable(): boolean {
+    return getTwoCbhCommand() !== null;
+}
+
+/** A database title derived from the `.cbh` / `.2cbh` file name. */
 export async function cbhTitle(cbhPath: string): Promise<string> {
-    return (await basename(cbhPath)).replace(/\.cbh$/i, "");
+    return (await basename(cbhPath)).replace(/\.2?cbh$/i, "");
 }
 
 export type CbhConversion = { pgnPath: string; report: CbhImportReport };
 
 /**
- * Converts a `.cbh` database into a temporary PGN file through the
- * `cbh_to_pgn` plugin command. The caller imports the PGN (for example with
- * `commands.convertPgn`) and then calls `removeTempPgn`.
+ * Converts a `.cbh` or `.2cbh` database into a temporary PGN file through the
+ * `cbh_to_pgn` / `twocbh_to_pgn` plugin command. The caller imports the PGN
+ * (for example with `commands.convertPgn`) and then calls `removeTempPgn`.
  */
 export async function cbhToTempPgn(cbhPath: string): Promise<CbhConversion> {
     const name = `chessin-cbh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pgn`;
     const pgnPath = await resolve(await tempDir(), name);
-    const report = unwrap(await commands.cbhToPgn(cbhPath, pgnPath));
+    let result: Result<CbhImportReport, string>;
+    if (isTwoCbhPath(cbhPath)) {
+        const twocbh = getTwoCbhCommand();
+        if (!twocbh) throw new Error(i18n.t("FirstRun.Scan.NotYet2cbh"));
+        result = await twocbh(cbhPath, pgnPath);
+    } else {
+        result = await commands.cbhToPgn(cbhPath, pgnPath);
+    }
+    const report = unwrap(result);
     for (const warning of report.warnings) {
         warn(`[cbh] ${cbhPath}: ${warning}`);
     }
@@ -47,8 +76,8 @@ export async function removeTempPgn(pgnPath: string): Promise<void> {
 }
 
 /**
- * Imports a ChessBase database: `.cbh` -> temporary PGN -> `.db3` through the
- * existing `convert_pgn` command. `targetDbPath` defaults to
+ * Imports a ChessBase database: `.cbh` / `.2cbh` -> temporary PGN -> `.db3`
+ * through the existing `convert_pgn` command. `targetDbPath` defaults to
  * `<databases dir>/<cbh name>.db3`.
  */
 export async function importCbhFile(

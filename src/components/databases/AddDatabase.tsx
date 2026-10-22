@@ -194,7 +194,7 @@ function AddDatabase({
                   filters: [
                     {
                       name: t("Import.Cbh.AnyFilter"),
-                      extensions: ["pgn", "pgn.zst", "cbh"],
+                      extensions: ["pgn", "pgn.zst", "cbh", "2cbh"],
                     },
                     {
                       name: "PGN file",
@@ -202,7 +202,7 @@ function AddDatabase({
                     },
                     {
                       name: t("Import.Cbh.FileFilter"),
-                      extensions: ["cbh"],
+                      extensions: ["cbh", "2cbh"],
                     },
                   ],
                 });
@@ -225,7 +225,7 @@ function AddDatabase({
                       capitalize(
                         firstFilename
                           .replaceAll(/[_-]/g, " ")
-                          .replace(/\.(pgn(\.(zst|bz2))?|cbh)$/i, ""),
+                          .replace(/\.(pgn(\.(zst|bz2))?|2?cbh)$/i, ""),
                       ),
                     );
                   }

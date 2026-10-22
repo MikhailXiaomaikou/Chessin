@@ -1,11 +1,17 @@
 import { Button, Modal, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
 import { useLoaderData } from "@tanstack/react-router";
 import { INITIAL_FEN } from "chessops/fen";
-import { useStore } from "jotai";
+import { useAtomValue, useStore } from "jotai";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  metaFromDraft,
+  newRepertoireDraft,
+  RepertoireMetaFields,
+} from "@/chessin/repertoire/MetaFields";
+import { saveRepertoireMeta } from "@/chessin/repertoire/model";
 import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
-import { addRecentFileAtom, tabFamily } from "@/state/atoms";
+import { addRecentFileAtom, sessionsAtom, tabFamily } from "@/state/atoms";
 import { headersToPGN } from "@/utils/chess";
 import { createFile } from "@/utils/files";
 
@@ -20,6 +26,9 @@ export default function CreateRepertoireModal({
   const [name, setName] = useState("");
   const [color, setColor] = useState<"white" | "black">("white");
   const [error, setError] = useState("");
+  // Chessin (S3-5): rating band / time control / coverage target, stored next to the file.
+  const sessions = useAtomValue(sessionsAtom);
+  const [meta, setMeta] = useState(() => newRepertoireDraft(sessions));
   const { documentDir } = useLoaderData({ from: "/" });
 
   const openInWorkspace = useOpenInWorkspace();
@@ -56,6 +65,11 @@ export default function CreateRepertoireModal({
     }
 
     const fileInfo = result.value;
+    await saveRepertoireMeta(
+      fileInfo.path,
+      trimmedName,
+      metaFromDraft(meta, color, INITIAL_FEN),
+    ).catch(() => undefined);
     const id = await openInWorkspace({
       tab: {
         name: trimmedName,
@@ -78,6 +92,7 @@ export default function CreateRepertoireModal({
 
     setName("");
     setColor("white");
+    setMeta(newRepertoireDraft(sessions));
     setError("");
     setOpened(false);
   }
@@ -121,6 +136,8 @@ export default function CreateRepertoireModal({
               ]}
             />
           </div>
+
+          <RepertoireMetaFields value={meta} onChange={setMeta} />
 
           <Button type="submit">{t("Common.Create")}</Button>
         </Stack>

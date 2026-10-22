@@ -21,6 +21,7 @@ import { useTranslation } from "react-i18next";
 import useSWR from "swr";
 import { useStore } from "zustand";
 import type { GameSort, NormalizedGame, Outcome } from "@/bindings";
+import { QueryBar } from "@/chessin/query/QueryBar";
 import { useOpenInWorkspace } from "@/chessin/workspace/openInWorkspace";
 import { query_games } from "@/utils/db";
 import { DatabaseViewStateContext } from "./DatabaseViewStateContext";
@@ -84,6 +85,7 @@ function GameTable() {
       search={
         <Flex style={{ gap: 20 }}>
           <Box style={{ flexGrow: 1 }}>
+            <QueryBar file={file} query={query} setQuery={setQuery} />
             <Group grow>
               <PlayerSearchInput
                 value={query?.player1 ?? undefined}

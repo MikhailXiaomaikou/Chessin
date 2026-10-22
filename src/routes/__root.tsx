@@ -1,4 +1,4 @@
-import { AppShell } from "@mantine/core";
+import { AppShell, Box } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { createRootRouteWithContext, Outlet, useNavigate } from "@tanstack/react-router";
 import { TauriEvent } from "@tauri-apps/api/event";
@@ -21,6 +21,8 @@ import { type Command, useRegisterCommands } from "@/chessin/commands/registry";
 import { DOCS_URL } from "@/chessin/config";
 import ChessinMounts from "@/chessin/shell/ChessinMounts";
 import { isFirstRunOpen } from "@/chessin/onboarding/firstRunState";
+import { COMMAND_BAR_HEIGHT, CommandBar } from "@/chessin/shell/CommandBar";
+import { NAV_COLLAPSED_WIDTH, NAV_WIDTH } from "@/chessin/shell/navItems";
 import { StatusBar } from "@/chessin/shell/StatusBar";
 import ClearDataDialog from "@/chessin/store/ClearDataDialog";
 import { markCleanExit } from "@/chessin/store/workspace";
@@ -50,6 +52,9 @@ type MenuAction = {
   action?: () => void;
   item?: "Hide" | "Copy" | "Cut" | "Paste" | "SelectAll" | "Undo" | "Redo" | "Quit";
 };
+
+/** Height of the custom menu bar (`TopBar`, win32 / linux without the native bar): 2.25rem. */
+const MENU_BAR_HEIGHT = 36;
 
 async function createMenu(menuActions: MenuGroup[]) {
   const items = await Promise.all(
@@ -517,24 +522,23 @@ function RootLayout() {
     };
   }, [navigate, setTabs, setActiveTab]);
 
+  // Chessin (S3-6): the custom menu bar exists only on win32 / linux without the
+  // native bar; the command bar sits below it on every platform and hides below `sm`.
+  const hasMenuBar =
+    !isNative &&
+    (import.meta.env.VITE_PLATFORM === "win32" || import.meta.env.VITE_PLATFORM === "linux");
+  const menuBarHeight = hasMenuBar ? MENU_BAR_HEIGHT : 0;
+
   return (
     <AppShell
       navbar={{
-        width: "3rem",
+        // Chessin (S3-6): the sidebar toggle collapses the nav to icons instead of hiding it.
+        width: showSidebar ? NAV_WIDTH : NAV_COLLAPSED_WIDTH,
         breakpoint: 0,
-        collapsed: {
-          desktop: !showSidebar,
-          mobile: !showSidebar,
-        },
       }}
-      header={
-        isNative ||
-        (import.meta.env.VITE_PLATFORM !== "win32" && import.meta.env.VITE_PLATFORM !== "linux")
-          ? undefined
-          : {
-              height: "2.25rem",
-            }
-      }
+      header={{
+        height: { base: menuBarHeight, sm: menuBarHeight + COMMAND_BAR_HEIGHT },
+      }}
       footer={{ height: "1.5rem" }}
       styles={{
         main: {
@@ -545,18 +549,20 @@ function RootLayout() {
       <AboutModal opened={opened} setOpened={setOpened} />
       <ClearDataDialog opened={clearDataOpened} onClose={() => setClearDataOpened(false)} />
       <ChessinMounts />
-      {!isNative &&
-        (import.meta.env.VITE_PLATFORM === "win32" ||
-          import.meta.env.VITE_PLATFORM === "linux") && (
-          <AppShell.Header>
+      <AppShell.Header withBorder={false}>
+        {hasMenuBar && (
+          <Box
+            h={MENU_BAR_HEIGHT}
+            style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}
+          >
             <TopBar menuActions={menuActions} />
-          </AppShell.Header>
+          </Box>
         )}
-      {showSidebar && (
-        <AppShell.Navbar>
-          <SideBar />
-        </AppShell.Navbar>
-      )}
+        <CommandBar />
+      </AppShell.Header>
+      <AppShell.Navbar aria-label={t("Nav.Label")}>
+        <SideBar />
+      </AppShell.Navbar>
       <AppShell.Main>
         <Outlet />
       </AppShell.Main>

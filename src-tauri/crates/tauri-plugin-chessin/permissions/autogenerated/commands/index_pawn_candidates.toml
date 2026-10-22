@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-index-pawn-candidates"
+description = "Enables the index_pawn_candidates command without any pre-configured scope."
+commands.allow = ["index_pawn_candidates"]
+
+[[permission]]
+identifier = "deny-index-pawn-candidates"
+description = "Denies the index_pawn_candidates command without any pre-configured scope."
+commands.deny = ["index_pawn_candidates"]

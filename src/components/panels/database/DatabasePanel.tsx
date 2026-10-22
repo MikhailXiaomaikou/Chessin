@@ -8,6 +8,10 @@ import useSWR from "swr/immutable";
 import { match } from "ts-pattern";
 import { useStore } from "zustand";
 import type { NormalizedGame } from "@/bindings";
+import { explorerViaIndex } from "@/chessin/search/explorer";
+import { IndexChip } from "@/chessin/search/IndexChip";
+import { isIndexAvailable, useIndexState } from "@/chessin/search/index";
+import { indexFallbackReason } from "@/chessin/search/mapping";
 import { offlineModeAtom } from "@/chessin/shell/offlineAtom";
 import {
   isOfflineError,
@@ -43,7 +47,13 @@ import MasterOptionsPanel from "./options/MastersOptionsPanel";
 // (default: anonymous Lichess Masters), so nothing here blocks on configuration.
 
 type ExplorerQuery =
-  | { type: "local"; tab: string; options: LocalOptions }
+  | {
+      type: "local";
+      tab: string;
+      options: LocalOptions;
+      /** S3-2: answer from the position index instead of `search_position`. */
+      index: boolean;
+    }
   | {
       type: "lichess";
       tab: string;
@@ -59,7 +69,12 @@ type ExplorerQuery =
       token: string;
     };
 
-type ExplorerData = { openings: Opening[]; games: NormalizedGame[] };
+type ExplorerData = {
+  openings: Opening[];
+  games: NormalizedGame[];
+  /** S3-2: lookup time when the index answered (shown on the index chip). */
+  indexMs?: number;
+};
 
 export type LocalOptions = {
   path: string | null;
@@ -108,8 +123,13 @@ async function fetchOpening(query: ExplorerQuery): Promise<ExplorerData> {
         }),
       };
     })
-    .with({ type: "local" }, async ({ options, tab }) => {
+    .with({ type: "local" }, async ({ options, tab, index }) => {
       if (!options.path) return { openings: [], games: [] };
+      if (index) {
+        // S3-2: the position index serves exact queries within its depth.
+        const data = await explorerViaIndex({ ...options, path: options.path });
+        return { openings: data.openings, games: data.games, indexMs: data.indexMs };
+      }
       const positionData = await searchPosition(options, tab);
       return {
         openings: sortOpenings(positionData[0]),
@@ -146,6 +166,10 @@ function DatabasePanel() {
   const { data: databases } = useSWR(isLocal ? "databases" : null, () => getDatabases());
   const localMissing =
     isLocal && databases !== undefined && !databases.some((d) => d.file === localPath);
+  // S3-2: the index answers exact queries within its depth; everything else
+  // (partial match, player filter, dates that cut a year) stays on `search_position`.
+  const { state: indexState } = useIndexState(localPath);
+  const indexReason = indexFallbackReason(localOptions, indexState, isIndexAvailable());
 
   useEffect(() => {
     if (isLocal) {
@@ -161,7 +185,12 @@ function DatabasePanel() {
   let query: ExplorerQuery | null = null;
   if (source.kind === "local") {
     if (!localMissing) {
-      query = { type: "local", tab: tabId, options: { ...localOptions, path: source.path } };
+      query = {
+        type: "local",
+        tab: tabId,
+        options: { ...localOptions, path: source.path },
+        index: indexReason === null,
+      };
     }
   } else if (source.kind === "lichess") {
     query = {
@@ -238,7 +267,17 @@ function DatabasePanel() {
   const header = (
     <>
       <Group justify="space-between" w="100%" wrap="nowrap">
-        <SourceChip tabId={tabId} />
+        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+          <SourceChip tabId={tabId} />
+          {isLocal && localPath && !localMissing && (
+            <IndexChip
+              dbPath={localPath}
+              used={indexReason === null && openingData?.indexMs !== undefined}
+              reason={indexReason}
+              ms={openingData?.indexMs}
+            />
+          )}
+        </Group>
 
         {tabType !== "options" && (
           <Text style={{ whiteSpace: "nowrap" }}>

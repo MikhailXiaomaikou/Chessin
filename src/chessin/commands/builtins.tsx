@@ -3,6 +3,8 @@ import { getDefaultStore, useSetAtom } from "jotai";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { getActiveTreeState, getActiveTreeStore } from "@/chessin/keymap/treeStores";
+import { openSimilarDrawer } from "@/chessin/search/drawerAtom";
+import { goBack, goForward, shellHistory } from "@/chessin/shell/history";
 import { recentlyClosedAtom, reopenLastClosedTab } from "@/chessin/store/recentlyClosed";
 import { allEnabledAtom, enableAllAtom } from "@/state/atoms";
 import { keymapCheatSheetOpenAtom } from "./paletteAtom";
@@ -35,6 +37,8 @@ export function useGlobalCommands(): void {
         navigate({ to });
       },
     });
+    // S3-6: shell history replays an `href` (pathname + search) recorded by `useShellHistory`.
+    const shellNavigate = (href: string) => navigate({ href });
 
     const commands: Command[] = [
       {
@@ -101,6 +105,19 @@ export function useGlobalCommands(): void {
         run: () => getActiveTreeState()?.clearShapes(),
       },
       {
+        // Hotkey (`FIND_SIMILAR`, mod+f) is bound in ChessinMounts through the typing guard.
+        id: "search.findSimilar",
+        section: "board",
+        title: () => t("Search.FindSimilar"),
+        shortcutKey: "FIND_SIMILAR",
+        aliases: ["similar", "find", "find similar", "相似", "查找相似", "相似对局", "兵形"],
+        enabled: hasBoard,
+        disabledReason: noBoard,
+        run: () => {
+          openSimilarDrawer();
+        },
+      },
+      {
         id: "engines.toggleAll",
         section: "engines",
         title: () => t("Palette.Command.ToggleEngines"),
@@ -155,6 +172,37 @@ export function useGlobalCommands(): void {
         "棋谱集",
       ]),
       nav("nav.engines", "/engines", () => t("SideBar.Engines"), ["engines", "stockfish", "引擎"]),
+      nav("nav.repertoire", "/repertoire", () => t("Nav.Repertoire"), [
+        "repertoire",
+        "repertoires",
+        "开局体系",
+        "开局谱",
+      ]),
+      {
+        // Hotkeys (`NAV_BACK` / `NAV_FORWARD`, mod+[ / mod+]) are bound by the command bar.
+        id: "nav.back",
+        section: "navigate",
+        title: () => t("Shell.Back"),
+        shortcutKey: "NAV_BACK",
+        aliases: ["back", "go back", "previous page", "后退", "返回", "上一页", "上一盘"],
+        enabled: () => shellHistory.canBack(),
+        disabledReason: () => t("Shell.NothingBack"),
+        run: () => {
+          goBack(shellNavigate);
+        },
+      },
+      {
+        id: "nav.forward",
+        section: "navigate",
+        title: () => t("Shell.Forward"),
+        shortcutKey: "NAV_FORWARD",
+        aliases: ["forward", "go forward", "next page", "前进", "下一页"],
+        enabled: () => shellHistory.canForward(),
+        disabledReason: () => t("Shell.NothingForward"),
+        run: () => {
+          goForward(shellNavigate);
+        },
+      },
     ];
 
     return registerCommands(commands);

@@ -28,6 +28,15 @@ impl LibraryState {
         &self.path
     }
 
+    /// Where `backup_library` writes: the `backups` directory next to the
+    /// library file (`<app_data_dir>/chessin/backups`).
+    pub fn backup_dir(&self) -> PathBuf {
+        self.path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("backups")
+    }
+
     /// Runs `f` against the library on a blocking thread (SQLite is synchronous),
     /// opening the file first if this is the first call.
     pub async fn run<T, F>(&self, f: F) -> Result<T, String>
@@ -74,6 +83,10 @@ mod tests {
         let value = state.clone().with(|lib| lib.kv_get("k")).unwrap();
         assert_eq!(value.as_deref(), Some("v"));
         assert_eq!(state.path(), path);
+        assert_eq!(
+            state.backup_dir(),
+            dir.path().join("chessin").join("backups")
+        );
     }
 
     #[test]

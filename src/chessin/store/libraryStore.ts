@@ -242,7 +242,15 @@ export function createMemoryBackend(now: () => number = Date.now): LibraryBacken
             });
             const list = versions.get(input.id) ?? [];
             const last = list[list.length - 1];
-            if (input.checkpoint !== null || !last || at - last.createdAt >= VERSION_MERGE_MS) {
+            // Same rule as the Rust store: an unlabelled put merges into the
+            // latest version only when that one is unlabelled and recent; a
+            // named checkpoint is never overwritten.
+            if (
+                input.checkpoint !== null ||
+                !last ||
+                last.label !== null ||
+                at - last.createdAt >= VERSION_MERGE_MS
+            ) {
                 list.push({
                     id: nextVersionId++,
                     docId: input.id,

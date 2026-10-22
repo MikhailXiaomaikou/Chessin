@@ -53,6 +53,9 @@ const CHESSBASE_OVERRIDES: Overrides = {
     SWAP_ORIENTATION: "ctrl+f",
     NEXT_GAME: "alt+arrowdown",
     PREVIOUS_GAME: "alt+arrowup",
+    // `ctrl+f` flips the board here (see the module comment): "find similar"
+    // is unbound and reached through the palette.
+    FIND_SIMILAR: "",
 };
 
 /**

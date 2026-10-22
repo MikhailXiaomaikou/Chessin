@@ -1,8 +1,8 @@
 //! Looks for ChessBase databases on disk (the `scan_chessbase` command).
 //!
-//! Only `.cbh` (CB v1, importable through `cbh_to_pgn`) and `.2cbh` (the
-//! ChessBase 2026 format, listed but not importable yet) header files are
-//! reported; the size is the sum of the database's side-car files.
+//! Only `.cbh` (CB v1, importable through `cbh_to_pgn`) and `.2cbh` (CB 17
+//! and later, importable through `twocbh_to_pgn`) header files are reported;
+//! the size is the sum of the database's side-car files.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use chessin_cb::header::CBH_HEADER_SIZE;
+use chessin_cb::twocbh::header::RECORD_SIZE as TWOCBH_RECORD_SIZE;
 
 /// How many directory levels below each root are searched.
 pub const MAX_DEPTH: usize = 3;
@@ -29,8 +30,8 @@ pub struct ChessBaseDb {
     pub name: String,
     /// `cbh` or `2cbh`.
     pub format: String,
-    /// Records in the database (games, texts and deleted games); `None` for
-    /// `2cbh` and for a `.cbh` file whose size is not a whole number of records.
+    /// Records in the database (games, texts and deleted games); `None` for a
+    /// header file whose size is not a whole number of records.
     pub games: Option<u32>,
     /// Size of the header file plus its side-car files.
     pub size_bytes: u64,
@@ -110,7 +111,7 @@ fn walk(dir: &Path, depth: usize, found: &mut BTreeMap<PathBuf, ChessBaseDb>) {
         };
         let games = match format {
             "cbh" => cbh_game_count(metadata.len()),
-            _ => None,
+            _ => twocbh_game_count(metadata.len()),
         };
         found.insert(
             path.clone(),
@@ -145,7 +146,16 @@ fn walk(dir: &Path, depth: usize, found: &mut BTreeMap<PathBuf, ChessBaseDb>) {
 /// Records in a `.cbh` file of `len` bytes: the file is a 46-byte header
 /// followed by 46-byte records. `None` when the size does not fit that layout.
 pub fn cbh_game_count(len: u64) -> Option<u32> {
-    let record = CBH_HEADER_SIZE as u64;
+    record_count(len, CBH_HEADER_SIZE as u64)
+}
+
+/// Records in a `.2cbh` file of `len` bytes: a 192-byte header followed by
+/// 192-byte records. `None` when the size does not fit that layout.
+pub fn twocbh_game_count(len: u64) -> Option<u32> {
+    record_count(len, TWOCBH_RECORD_SIZE as u64)
+}
+
+fn record_count(len: u64, record: u64) -> Option<u32> {
     if len < record || !len.is_multiple_of(record) {
         return None;
     }
@@ -190,6 +200,10 @@ mod tests {
         assert_eq!(cbh_game_count(46), Some(0));
         assert_eq!(cbh_game_count(46 * 4), Some(3));
         assert_eq!(cbh_game_count(46 * 4 + 1), None);
+        assert_eq!(twocbh_game_count(7), None);
+        assert_eq!(twocbh_game_count(192), Some(0));
+        assert_eq!(twocbh_game_count(192 * 4), Some(3));
+        assert_eq!(twocbh_game_count(192 * 4 + 1), None);
     }
 
     #[test]
@@ -201,7 +215,7 @@ mod tests {
         write(root, "games.cba", 10);
         write(root, "Games.txt", 99);
         let odd = write(root, "odd.cbh", 50);
-        let modern = write(root, "Modern.2cbh", 7);
+        let modern = write(root, "Modern.2cbh", 192 * 3);
         write(root, "Modern.2cbg", 3);
         let deep = write(root, "a/b/c/deep.cbh", 46);
         write(root, "a/b/c/d/toodeep.cbh", 46);
@@ -231,8 +245,8 @@ mod tests {
 
         let db = &found[1];
         assert_eq!((db.name.as_str(), db.format.as_str()), ("Modern", "2cbh"));
-        assert_eq!(db.games, None);
-        assert_eq!(db.size_bytes, 7 + 3);
+        assert_eq!(db.games, Some(2));
+        assert_eq!(db.size_bytes, 192 * 3 + 3);
 
         assert_eq!(found[2].games, Some(0));
         assert_eq!(

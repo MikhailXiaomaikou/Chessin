@@ -32,6 +32,7 @@ import { useTranslation } from "react-i18next";
 import useSWR from "swr";
 import type { DatabaseInfo } from "@/bindings";
 import { commands } from "@/bindings";
+import { SmartCollectionCards } from "@/chessin/query/SmartCollectionCards";
 import { DEFAULT_SOURCE, defaultSourceAtom, localSource } from "@/chessin/sources/sources";
 import { type TrashResult, useTrash, useTrashActionLabel } from "@/chessin/trash/TrashNotice";
 import { databaseConversionStateAtom, storedDatabasesDirAtom } from "@/state/atoms";
@@ -284,6 +285,7 @@ export default function DatabasesPage() {
                     />
                   ))}
               </SimpleGrid>
+              <SmartCollectionCards databases={databases ?? []} />
             </ScrollArea>
             {!isLoading && filteredDatabases.length === 0 && (
               <Center h="100%">

@@ -9,7 +9,14 @@ import {
     openFirstRun,
     setFirstRunVisible,
 } from "./firstRunState";
-import { classifyImportFile, titleFromFileName, uniqueDatabaseTitle } from "./importers";
+import {
+    type ChessBaseDb,
+    classifyImportFile,
+    isImportableChessBaseDb,
+    isTwoCbhImportAvailable,
+    titleFromFileName,
+    uniqueDatabaseTitle,
+} from "./importers";
 
 function db(title: string): DatabaseInfo {
     return {
@@ -33,6 +40,8 @@ describe("first run importers", () => {
         expect(classifyImportFile("/a/lichess_2024.pgn.zst")).toBe("pgn");
         expect(classifyImportFile("/a/twic.pgn.bz2")).toBe("pgn");
         expect(classifyImportFile("/a/MegaBase.cbh")).toBe("cbh");
+        expect(classifyImportFile("/a/Mega2026.2cbh")).toBe("2cbh");
+        expect(classifyImportFile("/a/Mega2026.2CBH")).toBe("2cbh");
         expect(classifyImportFile("/a/notes.txt")).toBeNull();
         expect(classifyImportFile("/a/archive.zst")).toBeNull();
         expect(classifyImportFile("/a/base.cbg")).toBeNull();
@@ -43,6 +52,25 @@ describe("first run importers", () => {
         expect(titleFromFileName("twic.pgn.zst")).toBe("Twic");
         expect(titleFromFileName("twic.pgn.bz2")).toBe("Twic");
         expect(titleFromFileName("Mega2024.cbh")).toBe("Mega2024");
+        expect(titleFromFileName("Mega_2026.2cbh")).toBe("Mega 2026");
+    });
+
+    it("imports scanned .cbh databases, and .2cbh ones when the command exists", () => {
+        const scanned = (format: string, path: string): ChessBaseDb => ({
+            path,
+            name: "x",
+            format,
+            games: null,
+            size_bytes: 0,
+            modified: null,
+        });
+        expect(isImportableChessBaseDb(scanned("cbh", "/a/x.cbh"))).toBe(true);
+        expect(isImportableChessBaseDb(scanned("cbh", "/a/x.2cbh"))).toBe(false);
+        expect(isImportableChessBaseDb(scanned("cbz", "/a/x.cbz"))).toBe(false);
+        // The committed bindings carry `twocbhToPgn`, so .2cbh is importable here.
+        expect(isTwoCbhImportAvailable()).toBe(true);
+        expect(isImportableChessBaseDb(scanned("2cbh", "/a/x.2cbh"))).toBe(true);
+        expect(isImportableChessBaseDb(scanned("2cbh", "/a/x.cbh"))).toBe(false);
     });
 
     it("de-duplicates titles against existing databases", () => {

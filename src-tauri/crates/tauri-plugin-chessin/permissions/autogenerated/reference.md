@@ -11,6 +11,8 @@ main window (see `src-tauri/capabilities/main.json`).
 
 - `allow-chessin-ping`
 - `allow-cbh-to-pgn`
+- `allow-cbh-detect-format`
+- `allow-twocbh-to-pgn`
 - `allow-store-get`
 - `allow-store-set`
 - `allow-store-delete`
@@ -19,7 +21,9 @@ main window (see `src-tauri/capabilities/main.json`).
 - `allow-doc-list`
 - `allow-doc-delete`
 - `allow-doc-versions`
+- `allow-doc-version-get`
 - `allow-doc-restore-version`
+- `allow-backup-library`
 - `allow-job-upsert`
 - `allow-job-list`
 - `allow-job-delete`
@@ -34,6 +38,12 @@ main window (see `src-tauri/capabilities/main.json`).
 - `allow-card-stats`
 - `allow-move-to-trash`
 - `allow-scan-chessbase`
+- `allow-index-build`
+- `allow-index-status`
+- `allow-index-delete`
+- `allow-index-position`
+- `allow-index-pawn-candidates`
+- `allow-index-games`
 
 ## Permission Table
 
@@ -43,6 +53,32 @@ main window (see `src-tauri/capabilities/main.json`).
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`chessin:allow-backup-library`
+
+</td>
+<td>
+
+Enables the backup_library command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-backup-library`
+
+</td>
+<td>
+
+Denies the backup_library command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>
@@ -196,6 +232,32 @@ Enables the card_upsert command without any pre-configured scope.
 <td>
 
 Denies the card_upsert command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-cbh-detect-format`
+
+</td>
+<td>
+
+Enables the cbh_detect_format command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-cbh-detect-format`
+
+</td>
+<td>
+
+Denies the cbh_detect_format command without any pre-configured scope.
 
 </td>
 </tr>
@@ -385,6 +447,32 @@ Denies the doc_restore_version command without any pre-configured scope.
 <tr>
 <td>
 
+`chessin:allow-doc-version-get`
+
+</td>
+<td>
+
+Enables the doc_version_get command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-doc-version-get`
+
+</td>
+<td>
+
+Denies the doc_version_get command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `chessin:allow-doc-versions`
 
 </td>
@@ -456,6 +544,162 @@ Enables the eval_cache_put command without any pre-configured scope.
 <td>
 
 Denies the eval_cache_put command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-index-build`
+
+</td>
+<td>
+
+Enables the index_build command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-index-build`
+
+</td>
+<td>
+
+Denies the index_build command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-index-delete`
+
+</td>
+<td>
+
+Enables the index_delete command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-index-delete`
+
+</td>
+<td>
+
+Denies the index_delete command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-index-games`
+
+</td>
+<td>
+
+Enables the index_games command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-index-games`
+
+</td>
+<td>
+
+Denies the index_games command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-index-pawn-candidates`
+
+</td>
+<td>
+
+Enables the index_pawn_candidates command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-index-pawn-candidates`
+
+</td>
+<td>
+
+Denies the index_pawn_candidates command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-index-position`
+
+</td>
+<td>
+
+Enables the index_position command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-index-position`
+
+</td>
+<td>
+
+Denies the index_position command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-index-status`
+
+</td>
+<td>
+
+Enables the index_status command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-index-status`
+
+</td>
+<td>
+
+Denies the index_status command without any pre-configured scope.
 
 </td>
 </tr>
@@ -690,6 +934,32 @@ Enables the store_set command without any pre-configured scope.
 <td>
 
 Denies the store_set command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:allow-twocbh-to-pgn`
+
+</td>
+<td>
+
+Enables the twocbh_to_pgn command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`chessin:deny-twocbh-to-pgn`
+
+</td>
+<td>
+
+Denies the twocbh_to_pgn command without any pre-configured scope.
 
 </td>
 </tr>

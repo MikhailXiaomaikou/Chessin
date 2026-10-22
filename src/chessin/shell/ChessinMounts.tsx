@@ -9,10 +9,12 @@ import { useJobRunner } from "@/chessin/jobs/useJobRunner";
 // here so they do not depend on which route bundle happens to load first.
 import "@/chessin/review/jobHandler";
 import "@/chessin/sync/autoSync";
+import "@/chessin/search/index";
 import { typingGuardOptions } from "@/chessin/keymap/guard";
 import KeymapCheatSheet from "@/chessin/keymap/KeymapCheatSheet";
 import { getActiveTreeState } from "@/chessin/keymap/treeStores";
 import FirstRun from "@/chessin/onboarding/FirstRun";
+import SimilarDrawer, { useFindSimilarHotkey } from "@/chessin/search/SimilarDrawer";
 import { keyMapAtom } from "@/state/keybinds";
 
 /**
@@ -29,6 +31,8 @@ export default function ChessinMounts() {
 
   useGlobalCommands();
   useJobRunner();
+  // S3-2: `mod+f` opens the "查找相似" drawer on a board tab (typing-guarded).
+  useFindSimilarHotkey();
 
   // The palette must open from anywhere, including text inputs.
   useHotkeys(
@@ -91,6 +95,7 @@ export default function ChessinMounts() {
       <CommandPalette />
       <KeymapCheatSheet />
       <FirstRun />
+      <SimilarDrawer />
     </>
   );
 }

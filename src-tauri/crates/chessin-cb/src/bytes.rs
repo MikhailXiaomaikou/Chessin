@@ -1,8 +1,9 @@
-//! Bounds-checked little helpers for the fixed-layout records of the format.
+//! Bounds-checked little helpers for the fixed-layout records of the formats.
 //!
-//! `.cbh`, `.cbg` and `.cba` are big-endian; the entity files are little-endian.
-//! Every accessor returns `None` when the slice is too short, so a truncated or
-//! corrupt file turns into a reported error instead of a panic.
+//! In CBH v1 `.cbh`, `.cbg` and `.cba` are big-endian and the entity files are
+//! little-endian; 2CBH is little-endian apart from a few headers. Every accessor
+//! returns `None` when the slice is too short, so a truncated or corrupt file
+//! turns into a reported error instead of a panic.
 
 /// Sequential reader over a byte slice.
 pub struct Reader<'a> {
@@ -17,6 +18,16 @@ impl<'a> Reader<'a> {
 
     pub fn remaining(&self) -> usize {
         self.data.len().saturating_sub(self.pos)
+    }
+
+    /// Bytes consumed so far.
+    pub fn position(&self) -> usize {
+        self.pos
+    }
+
+    /// The bytes not consumed yet.
+    pub fn rest(&self) -> &'a [u8] {
+        self.data.get(self.pos..).unwrap_or(&[])
     }
 
     pub fn take(&mut self, n: usize) -> Option<&'a [u8]> {
@@ -62,6 +73,33 @@ impl<'a> Reader<'a> {
 
     pub fn le_i16(&mut self) -> Option<i16> {
         self.le_u16().map(|v| v as i16)
+    }
+
+    pub fn le_u32(&mut self) -> Option<u32> {
+        self.take(4)
+            .map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    }
+
+    pub fn le_i32(&mut self) -> Option<i32> {
+        self.le_u32().map(|v| v as i32)
+    }
+
+    pub fn le_u64(&mut self) -> Option<u64> {
+        self.take(8)
+            .map(|s| u64::from_le_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]))
+    }
+
+    pub fn le_i64(&mut self) -> Option<i64> {
+        self.le_u64().map(|v| v as i64)
+    }
+
+    pub fn be_u64(&mut self) -> Option<u64> {
+        self.take(8)
+            .map(|s| u64::from_be_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]))
+    }
+
+    pub fn be_i64(&mut self) -> Option<i64> {
+        self.be_u64().map(|v| v as i64)
     }
 }
 
@@ -114,10 +152,25 @@ mod tests {
         let data = [0x34, 0x12, 0xfe, 0xff, 0x78, 0x56, 0x34, 0x12];
         let mut r = Reader::new(&data);
         assert_eq!(r.le_u16(), Some(0x1234));
+        assert_eq!(r.position(), 2);
         assert_eq!(r.le_i16(), Some(-2));
         assert_eq!(le_u32_at(&data, 4), Some(0x1234_5678));
         assert_eq!(le_i32_at(&data, 4), Some(0x1234_5678));
         assert_eq!(le_i32_at(&data, 6), None);
+        let mut r = Reader::new(&data);
+        assert_eq!(r.le_i32(), Some(-0x0001_edcc));
+        assert_eq!(r.le_u32(), Some(0x1234_5678));
+        assert_eq!(r.le_u32(), None);
+        let wide = [
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let mut r = Reader::new(&wide);
+        assert_eq!(r.le_i64(), Some(-1));
+        assert_eq!(r.le_u64(), Some(1));
+        let mut r = Reader::new(&wide);
+        assert_eq!(r.be_i64(), Some(-1));
+        assert_eq!(r.be_u64(), Some(1 << 56));
+        assert_eq!(r.be_u64(), None);
     }
 
     #[test]

@@ -25,6 +25,33 @@ async cbhToPgn(cbhPath: string, outPgnPath: string) : Promise<Result<CbhImportRe
 }
 },
 /**
+ * Tells a ChessBase `.cbh` database (ChessBase 6 to 16) from a `.2cbh` one
+ * (ChessBase 17 and later) by the file's header, falling back to the
+ * extension when the header is unreadable: `"cbh"`, `"2cbh"` or `"unknown"`
+ * when it is neither. A file that cannot be opened is an error.
+ */
+async cbhDetectFormat(path: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|cbh_detect_format", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Converts a ChessBase `.2cbh` database (ChessBase 17 and later; the sibling
+ * `.2cbg`, `.2cba` and `.2lid` files are found next to it) into one PGN file
+ * at `out_pgn_path`, which the frontend then imports with `convert_pgn`.
+ */
+async twocbhToPgn(path: string, outPgnPath: string) : Promise<Result<CbhImportReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|twocbh_to_pgn", { path, outPgnPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Reads a key of the `kv` table (`workspace.tabs`, …); `None` when unset.
  */
 async storeGet(key: string) : Promise<Result<string | null, string>> {
@@ -117,12 +144,38 @@ async docVersions(id: string) : Promise<Result<VersionMeta[], string>> {
 }
 },
 /**
+ * The stored payload of one version of a document (see `doc_versions`);
+ * `None` when the document has no version with that id.
+ */
+async docVersionGet(id: string, versionId: bigint) : Promise<Result<string | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|doc_version_get", { id, versionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Makes `version_id` the document's current payload; the state before the
  * restore stays in the history.
  */
 async docRestoreVersion(id: string, versionId: bigint) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|doc_restore_version", { id, versionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Writes a snapshot of the library (`VACUUM INTO`) to
+ * `<app_data_dir>/chessin/backups/library-<YYYYMMDD-HHMMSS>.sqlite` (UTC),
+ * deletes the oldest backups beyond the seven newest and returns the path
+ * of the new file.
+ */
+async backupLibrary() : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|backup_library") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -296,6 +349,87 @@ async scanChessbase(dirs: string[] | null) : Promise<Result<ChessBaseDb[], strin
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Builds the position index (`<db>.db3.cpi`) of a game database, or brings
+ * an existing one up to date with the games added since (a full rebuild
+ * when `max_ply`, 40 by default, differs from the index's). Emits
+ * `chessin://index-progress` ([`IndexProgress`], `progress` 0–1) while it
+ * runs and once more with `finished: true` at the end, success or not. A
+ * second build of the same database while one runs is an error.
+ */
+async indexBuild(dbPath: string, maxPly: number | null) : Promise<Result<IndexStats, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|index_build", { dbPath, maxPly }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The stats of the database's position index; `None` when it has no
+ * usable index (missing or corrupt: build it).
+ */
+async indexStatus(dbPath: string) : Promise<Result<IndexStats | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|index_status", { dbPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Removes the database's position index (cancelling a running build);
+ * a missing index is not an error.
+ */
+async indexDelete(dbPath: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|index_delete", { dbPath }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The moves played from `fen` by the indexed games that pass `filter`,
+ * most played first, with up to `limit` of those games (highest rated
+ * first). The result is empty past the index depth (`ply` tells); an
+ * error when the database has no index.
+ */
+async indexPosition(dbPath: string, fen: string, filter: IndexFilter, limit: number) : Promise<Result<IndexPositionResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|index_position", { dbPath, fen, filter, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Up to `limit` ids of indexed games that may have had the pawn structure
+ * of `fen` at ply 10, 20, 30, 40, 50 or 60: a bloom pre-filter with false
+ * positives, to be verified by replaying the candidates.
+ */
+async indexPawnCandidates(dbPath: string, fen: string, limit: number) : Promise<Result<number[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|index_pawn_candidates", { dbPath, fen, limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The rows of up to 500 games by id, in the requested order (ids that do
+ * not exist are skipped), read straight from the database with the main
+ * line rendered as SAN movetext: for the explorer's sample list, without
+ * the OFFSET walk of `get_games`. The database is opened read-only.
+ */
+async indexGames(dbPath: string, ids: number[]) : Promise<Result<IndexGame[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("plugin:chessin|index_games", { dbPath, ids }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -446,8 +580,8 @@ name: string;
  */
 format: string; 
 /**
- * Records in the database (games, texts and deleted games); `None` for
- * `2cbh` and for a `.cbh` file whose size is not a whole number of records.
+ * Records in the database (games, texts and deleted games); `None` for a
+ * header file whose size is not a whole number of records.
  */
 games: number | null; 
 /**
@@ -474,6 +608,149 @@ export type DocumentMeta = { id: string; kind: string; title: string; origin: st
  * Unix milliseconds.
  */
 updated_at: bigint }
+/**
+ * Which games `index_position` counts. A bound on a value the index does
+ * not know (an unrated player, an undated game) excludes the game.
+ */
+export type IndexFilter = { 
+/**
+ * Both players rated at least this.
+ */
+min_elo: number | null; 
+/**
+ * Both players rated at most this.
+ */
+max_elo: number | null; 
+/**
+ * `1-0`, `0-1` or `1/2-1/2`.
+ */
+result: string | null; year_from: number | null; year_to: number | null }
+/**
+ * One game as [`load_games`] returns it.
+ */
+export type IndexGame = { id: number; 
+/**
+ * Empty when the player has no name.
+ */
+white: string; black: string; white_elo: number | null; black_elo: number | null; 
+/**
+ * `1-0`, `0-1`, `1/2-1/2` or `*` (also for an unknown or missing result).
+ */
+result: string; 
+/**
+ * As stored (`YYYY.MM.DD`, possibly with `?` digits).
+ */
+date: string | null; event: string; site: string; eco: string | null; ply_count: number | null; 
+/**
+ * The start position; `None` for the standard one.
+ */
+fen: string | null; 
+/**
+ * The main line as SAN movetext (`1. e4 e5 2. Nf3`), without the
+ * result token; empty when the moves do not decode.
+ */
+moves: string }
+/**
+ * A game that reached the queried position, and at which ply.
+ */
+export type IndexGameRef = { id: number; ply: number }
+/**
+ * One move played from the queried position.
+ */
+export type IndexMoveStats = { 
+/**
+ * Empty for the games that ended in the position.
+ */
+uci: string; 
+/**
+ * `*` for the games that ended in the position.
+ */
+san: string; white: number; 
+/**
+ * Draws plus games with an unknown result, as the fallback search counts them.
+ */
+draw: number; black: number; games: number; 
+/**
+ * Mean rating over the games with a known rating; 0 when none.
+ */
+avg_elo: number; 
+/**
+ * The latest known year; 0 when none.
+ */
+last_year: number }
+/**
+ * What `index_position` returns.
+ */
+export type IndexPositionResult = { 
+/**
+ * The ply the queried FEN describes (from its move number and side to
+ * move). Past the index depth the result is empty.
+ */
+ply: number; 
+/**
+ * Most played first.
+ */
+moves: IndexMoveStats[]; 
+/**
+ * Up to `limit` games, highest rated first.
+ */
+games: IndexGameRef[]; 
+/**
+ * Games that reached the position and pass the filter.
+ */
+total: number }
+/**
+ * Payload of the `chessin://index-progress` event.
+ */
+export type IndexProgress = { 
+/**
+ * The database the index belongs to, as passed to `index_build`.
+ */
+db_path: string; 
+/**
+ * `0.0` to `1.0`.
+ */
+progress: number; 
+/**
+ * `true` on the last event of a build, whether it succeeded or failed.
+ */
+finished: boolean }
+/**
+ * What an index holds; also what [`build`] and [`update`] report.
+ */
+export type IndexStats = { 
+/**
+ * Games whose positions are indexed.
+ */
+games: number; 
+/**
+ * Position occurrences stored (at most `max_ply + 1` per game).
+ */
+postings: bigint; 
+/**
+ * Size of the sidecar file.
+ */
+bytes: bigint; 
+/**
+ * The largest game id the index covers; `update` indexes the ids above it.
+ */
+max_game_id: number; 
+/**
+ * Unix seconds of the last build or update.
+ */
+built_at: bigint; 
+/**
+ * Plies indexed per game.
+ */
+max_ply: number; 
+/**
+ * Games whose moves could not be decoded (not indexed).
+ */
+skipped: number; 
+/**
+ * Segments in the file (1 after a full build).
+ */
+segments: number }
 /**
  * One row of `jobs`.
  */

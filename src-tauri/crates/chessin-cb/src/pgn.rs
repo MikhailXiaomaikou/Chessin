@@ -199,6 +199,15 @@ pub fn write_pgn<W: Write>(game: &Game, w: &mut W) -> std::io::Result<()> {
     if let Some(tc) = &h.time_control {
         tags.push(("TimeControl", tc.clone()));
     }
+    if let Some(t) = &h.white_team {
+        tags.push(("WhiteTeam", t.clone()));
+    }
+    if let Some(t) = &h.black_team {
+        tags.push(("BlackTeam", t.clone()));
+    }
+    if let Some(b) = h.board {
+        tags.push(("Board", b.to_string()));
+    }
     if h.forfeit {
         tags.push(("Termination", "forfeit".to_string()));
     }

@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the backup_library command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-backup-library",
+          "markdownDescription": "Enables the backup_library command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the backup_library command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-backup-library",
+          "markdownDescription": "Denies the backup_library command without any pre-configured scope."
+        },
+        {
           "description": "Enables the card_delete command without any pre-configured scope.",
           "type": "string",
           "const": "allow-card-delete",
@@ -365,6 +377,18 @@
           "type": "string",
           "const": "deny-card-upsert",
           "markdownDescription": "Denies the card_upsert command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the cbh_detect_format command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-cbh-detect-format",
+          "markdownDescription": "Enables the cbh_detect_format command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the cbh_detect_format command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-cbh-detect-format",
+          "markdownDescription": "Denies the cbh_detect_format command without any pre-configured scope."
         },
         {
           "description": "Enables the cbh_to_pgn command without any pre-configured scope.",
@@ -451,6 +475,18 @@
           "markdownDescription": "Denies the doc_restore_version command without any pre-configured scope."
         },
         {
+          "description": "Enables the doc_version_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-doc-version-get",
+          "markdownDescription": "Enables the doc_version_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the doc_version_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-doc-version-get",
+          "markdownDescription": "Denies the doc_version_get command without any pre-configured scope."
+        },
+        {
           "description": "Enables the doc_versions command without any pre-configured scope.",
           "type": "string",
           "const": "allow-doc-versions",
@@ -485,6 +521,78 @@
           "type": "string",
           "const": "deny-eval-cache-put",
           "markdownDescription": "Denies the eval_cache_put command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the index_build command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-index-build",
+          "markdownDescription": "Enables the index_build command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the index_build command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-index-build",
+          "markdownDescription": "Denies the index_build command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the index_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-index-delete",
+          "markdownDescription": "Enables the index_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the index_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-index-delete",
+          "markdownDescription": "Denies the index_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the index_games command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-index-games",
+          "markdownDescription": "Enables the index_games command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the index_games command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-index-games",
+          "markdownDescription": "Denies the index_games command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the index_pawn_candidates command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-index-pawn-candidates",
+          "markdownDescription": "Enables the index_pawn_candidates command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the index_pawn_candidates command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-index-pawn-candidates",
+          "markdownDescription": "Denies the index_pawn_candidates command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the index_position command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-index-position",
+          "markdownDescription": "Enables the index_position command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the index_position command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-index-position",
+          "markdownDescription": "Denies the index_position command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the index_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-index-status",
+          "markdownDescription": "Enables the index_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the index_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-index-status",
+          "markdownDescription": "Denies the index_status command without any pre-configured scope."
         },
         {
           "description": "Enables the job_delete command without any pre-configured scope.",
@@ -595,10 +703,22 @@
           "markdownDescription": "Denies the store_set command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-restore-version`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`",
+          "description": "Enables the twocbh_to_pgn command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-twocbh-to-pgn",
+          "markdownDescription": "Enables the twocbh_to_pgn command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the twocbh_to_pgn command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-twocbh-to-pgn",
+          "markdownDescription": "Denies the twocbh_to_pgn command without any pre-configured scope."
+        },
+        {
+          "description": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-cbh-detect-format`\n- `allow-twocbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-version-get`\n- `allow-doc-restore-version`\n- `allow-backup-library`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`\n- `allow-index-build`\n- `allow-index-status`\n- `allow-index-delete`\n- `allow-index-position`\n- `allow-index-pawn-candidates`\n- `allow-index-games`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-restore-version`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`"
+          "markdownDescription": "Default permissions for the Chessin plugin.\n\n#### Granted Permissions\n\nEvery Chessin command is allowed; the plugin is only ever loaded by the Chessin\nmain window (see `src-tauri/capabilities/main.json`).\n\n\n#### This default permission set includes:\n\n- `allow-chessin-ping`\n- `allow-cbh-to-pgn`\n- `allow-cbh-detect-format`\n- `allow-twocbh-to-pgn`\n- `allow-store-get`\n- `allow-store-set`\n- `allow-store-delete`\n- `allow-doc-put`\n- `allow-doc-get`\n- `allow-doc-list`\n- `allow-doc-delete`\n- `allow-doc-versions`\n- `allow-doc-version-get`\n- `allow-doc-restore-version`\n- `allow-backup-library`\n- `allow-job-upsert`\n- `allow-job-list`\n- `allow-job-delete`\n- `allow-job-prune`\n- `allow-eval-cache-get`\n- `allow-eval-cache-put`\n- `allow-card-upsert`\n- `allow-card-list`\n- `allow-card-get`\n- `allow-card-delete`\n- `allow-card-log`\n- `allow-card-stats`\n- `allow-move-to-trash`\n- `allow-scan-chessbase`\n- `allow-index-build`\n- `allow-index-status`\n- `allow-index-delete`\n- `allow-index-position`\n- `allow-index-pawn-candidates`\n- `allow-index-games`"
         }
       ]
     }

@@ -15,7 +15,7 @@ pub const RECORD_HEADER_SIZE: usize = 14;
 /// Size of the header of one annotation.
 pub const ANNOTATION_HEADER_SIZE: usize = 6;
 /// ChessBase's diagram marker inside a text annotation.
-const DIAGRAM_MARKER: u8 = 0x9e;
+pub(crate) const DIAGRAM_MARKER: u8 = 0x9e;
 
 /// One annotation, not yet interpreted.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,7 +144,9 @@ fn decode_text(data: &[u8], dec: &TextDecoder) -> String {
     out
 }
 
-fn colour_letter(c: u8) -> char {
+/// The PGN colour letter of a ChessBase colour id (2 green, 3 yellow, 4 red;
+/// anything else is written blue).
+pub(crate) fn colour_letter(c: u8) -> char {
     match c {
         2 => 'G',
         3 => 'Y',
@@ -154,7 +156,7 @@ fn colour_letter(c: u8) -> char {
 }
 
 /// Square name from the 1-based numbering of squares and arrows.
-fn square_name_1(v: u8) -> Option<String> {
+pub(crate) fn square_name_1(v: u8) -> Option<String> {
     if !(1..=64).contains(&v) {
         return None;
     }
@@ -164,7 +166,7 @@ fn square_name_1(v: u8) -> Option<String> {
     Some(format!("{file}{rank}"))
 }
 
-fn hms(total_seconds: u64) -> String {
+pub(crate) fn hms(total_seconds: u64) -> String {
     format!(
         "{}:{:02}:{:02}",
         total_seconds / 3600,
@@ -173,7 +175,7 @@ fn hms(total_seconds: u64) -> String {
     )
 }
 
-fn eval_string(value: i16, mate: bool) -> String {
+pub(crate) fn eval_string(value: i16, mate: bool) -> String {
     if mate {
         format!("#{value}")
     } else {

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-twocbh-to-pgn"
+description = "Enables the twocbh_to_pgn command without any pre-configured scope."
+commands.allow = ["twocbh_to_pgn"]
+
+[[permission]]
+identifier = "deny-twocbh-to-pgn"
+description = "Denies the twocbh_to_pgn command without any pre-configured scope."
+commands.deny = ["twocbh_to_pgn"]

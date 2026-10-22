@@ -26,6 +26,9 @@
 //! still open a Chessin library; anything Chessin adds there goes into `chessin_*`
 //! tables with their own migrations, plus the side-car `.cpi` position index.
 //!
+//! [`Library::backup_to`] snapshots the whole file with `VACUUM INTO` as
+//! `library-<UTC stamp>.sqlite` in a backups directory and rotates the old ones.
+//!
 //! Timestamps are Unix milliseconds. Every method takes `&self`/`&mut self` on a
 //! single connection; the plugin serialises access with a mutex.
 
@@ -142,6 +145,12 @@ pub enum Error {
     Sqlite(#[from] rusqlite::Error),
     #[error("cannot create {path}: {source}")]
     CreateDir {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("cannot write backup {path}: {source}")]
+    Backup {
         path: PathBuf,
         #[source]
         source: std::io::Error,
@@ -405,6 +414,19 @@ impl Library {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
+    /// The stored payload of one version of a document; `None` when the
+    /// document has no version with that id.
+    pub fn doc_version_get(&self, id: &str, version_id: i64) -> Result<Option<String>, Error> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT data FROM document_versions WHERE id = ?1 AND doc_id = ?2",
+                params![version_id, id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
     /// Makes the version's payload the document's current one. The restored
     /// payload is also appended as a new (unlabelled) version so that the state
     /// before the restore stays in the history.
@@ -497,6 +519,107 @@ impl Library {
         })?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
+
+    // ----- backups --------------------------------------------------------
+
+    /// Writes a compact, consistent snapshot of the library (`VACUUM INTO`,
+    /// committed WAL content included) to
+    /// `<dir>/library-<YYYYMMDD-HHMMSS>.sqlite`, the stamp being `now_ms` in
+    /// UTC, creating `dir` when needed. The snapshot is written to a `.tmp`
+    /// file first and renamed, so a failure never leaves a partial backup
+    /// behind (a backup made the same second is replaced). Then the oldest
+    /// `library-*.sqlite` files beyond `keep` (the new one counted) are
+    /// deleted. Returns the path of the new file.
+    pub fn backup_to(&self, dir: &Path, now_ms: i64, keep: usize) -> Result<PathBuf, Error> {
+        fs::create_dir_all(dir).map_err(|source| Error::CreateDir {
+            path: dir.to_path_buf(),
+            source,
+        })?;
+        let name = format!("{BACKUP_PREFIX}{}{BACKUP_SUFFIX}", backup_stamp(now_ms));
+        let path = dir.join(&name);
+        let tmp = dir.join(format!("{name}.tmp"));
+        let io_err = |path: &Path, source: std::io::Error| Error::Backup {
+            path: path.to_path_buf(),
+            source,
+        };
+        let Some(tmp_str) = tmp.to_str() else {
+            return Err(io_err(
+                &tmp,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "the path is not valid UTF-8",
+                ),
+            ));
+        };
+        // `VACUUM INTO` refuses to overwrite, so a leftover of a crashed run
+        // goes first; a missing file is fine.
+        let _ = fs::remove_file(&tmp);
+        if let Err(e) = self.conn.execute("VACUUM INTO ?1", [tmp_str]) {
+            let _ = fs::remove_file(&tmp);
+            return Err(e.into());
+        }
+        if let Err(source) = fs::rename(&tmp, &path) {
+            let _ = fs::remove_file(&tmp);
+            return Err(io_err(&path, source));
+        }
+        rotate_backups(dir, &name, keep)?;
+        Ok(path)
+    }
+}
+
+/// File name of a backup: `library-<YYYYMMDD-HHMMSS>.sqlite`.
+const BACKUP_PREFIX: &str = "library-";
+const BACKUP_SUFFIX: &str = ".sqlite";
+
+/// Deletes the `library-*.sqlite` files in `dir` beyond the `keep` newest by
+/// name (the stamps sort chronologically); `just_written` is never deleted,
+/// even when a clock set back makes it sort as old.
+fn rotate_backups(dir: &Path, just_written: &str, keep: usize) -> Result<(), Error> {
+    let entries = fs::read_dir(dir).map_err(|source| Error::Backup {
+        path: dir.to_path_buf(),
+        source,
+    })?;
+    let mut names: Vec<String> = entries
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.starts_with(BACKUP_PREFIX) && name.ends_with(BACKUP_SUFFIX))
+        .collect();
+    names.sort_unstable_by(|a, b| b.cmp(a));
+    for name in names.iter().skip(keep).filter(|n| *n != just_written) {
+        let path = dir.join(name);
+        fs::remove_file(&path).map_err(|source| Error::Backup { path, source })?;
+    }
+    Ok(())
+}
+
+/// `now_ms` (Unix milliseconds) as `YYYYMMDD-HHMMSS` in UTC.
+fn backup_stamp(now_ms: i64) -> String {
+    let secs = now_ms.div_euclid(1000);
+    let days = secs.div_euclid(86_400);
+    let of_day = secs.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    format!(
+        "{year:04}{month:02}{day:02}-{:02}{:02}{:02}",
+        of_day / 3600,
+        of_day % 3600 / 60,
+        of_day % 60
+    )
+}
+
+/// Proleptic Gregorian (year, month, day) of a day count since 1970-01-01
+/// (Howard Hinnant's `civil_from_days`).
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097); // day of era, 0..=146096
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365; // 0..=399
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // 0..=365, March-based
+    let mp = (5 * doy + 2) / 153; // 0..=11, March = 0
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    (year, month as u32, day as u32)
 }
 
 fn migrate(conn: &mut Connection) -> Result<(), Error> {
@@ -856,6 +979,136 @@ mod tests {
         assert_eq!(meta["size_bytes"], 10);
         assert!(meta["modified"].is_number());
         assert!(rows[0].deleted_at > 0);
+    }
+
+    #[test]
+    fn doc_version_get_returns_the_payload_of_that_document_only() {
+        let mut lib = Library::open_in_memory().unwrap();
+        lib.doc_put_at(game("t", "old"), Some("start"), 0).unwrap();
+        lib.doc_put_at(game("t", "new"), None, 10 * MIN).unwrap();
+        lib.doc_put_at(game("u", "other"), None, 0).unwrap();
+        let versions = lib.doc_versions("t").unwrap();
+        assert_eq!(versions.len(), 2);
+        assert_eq!(
+            lib.doc_version_get("t", versions[0].id).unwrap().as_deref(),
+            Some("new")
+        );
+        assert_eq!(
+            lib.doc_version_get("t", versions[1].id).unwrap().as_deref(),
+            Some("old")
+        );
+        assert_eq!(lib.doc_version_get("t", 9_999).unwrap(), None);
+        // A version of another document is not visible through this one.
+        let foreign = lib.doc_versions("u").unwrap()[0].id;
+        assert_eq!(lib.doc_version_get("t", foreign).unwrap(), None);
+        assert_eq!(lib.doc_version_get("missing", foreign).unwrap(), None);
+    }
+
+    #[test]
+    fn backup_stamp_is_the_utc_calendar_time() {
+        // Reference values from `date -u -d @<secs> +%Y%m%d-%H%M%S`.
+        assert_eq!(backup_stamp(0), "19700101-000000");
+        assert_eq!(backup_stamp(951_782_400_000), "20000229-000000");
+        assert_eq!(backup_stamp(1_709_251_199_999), "20240229-235959");
+        assert_eq!(backup_stamp(1_735_689_599_000), "20241231-235959");
+        assert_eq!(backup_stamp(1_761_134_400_000), "20251022-120000");
+        assert_eq!(backup_stamp(2_147_483_647_000), "20380119-031407");
+        assert_eq!(backup_stamp(-1), "19691231-235959");
+        // Every day of a 400-year cycle round-trips through the Gregorian rules.
+        let mut days = 0_i64;
+        let mut date = (1970_i64, 1_u32, 1_u32);
+        while days < 146_097 {
+            assert_eq!(civil_from_days(days), date, "day {days}");
+            days += 1;
+            date = next_day(date);
+        }
+    }
+
+    fn next_day((year, month, day): (i64, u32, u32)) -> (i64, u32, u32) {
+        let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+        let length = match month {
+            2 if leap => 29,
+            2 => 28,
+            4 | 6 | 9 | 11 => 30,
+            _ => 31,
+        };
+        match (day < length, month < 12) {
+            (true, _) => (year, month, day + 1),
+            (false, true) => (year, month + 1, 1),
+            (false, false) => (year + 1, 1, 1),
+        }
+    }
+
+    #[test]
+    fn backup_to_writes_a_sqlite_snapshot_and_keeps_the_newest_seven() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut lib = Library::open(dir.path().join("library.sqlite")).unwrap();
+        lib.kv_set("workspace.tabs", "[1]").unwrap();
+        lib.doc_put_at(game("t", "{\"a\":1}"), Some("c"), 0)
+            .unwrap();
+        let backups = dir.path().join("chessin").join("backups");
+
+        let path = lib.backup_to(&backups, 1_761_134_400_000, 7).unwrap();
+        assert_eq!(path, backups.join("library-20251022-120000.sqlite"));
+        assert!(path.is_file());
+        assert!(!backups.join("library-20251022-120000.sqlite.tmp").exists());
+        let bytes = fs::read(&path).unwrap();
+        assert_eq!(&bytes[..16], b"SQLite format 3\0");
+        // Opened on its own, the copy holds the rows (the WAL content included).
+        let copy =
+            Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let tabs: String = copy
+            .query_row(
+                "SELECT value FROM kv WHERE key = 'workspace.tabs'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tabs, "[1]");
+        let versions: i64 = copy
+            .query_row("SELECT count(*) FROM document_versions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(versions, 1);
+        drop(copy);
+        // The live library is untouched and still works.
+        lib.kv_set("workspace.tabs", "[2]").unwrap();
+
+        // A backup made the same second replaces the file, not an error.
+        let same = lib.backup_to(&backups, 1_761_134_400_999, 7).unwrap();
+        assert_eq!(same, path);
+        // Unrelated files are left alone by the rotation.
+        fs::write(backups.join("notes.txt"), b"keep me").unwrap();
+        fs::write(backups.join("library-old.sqlite.bak"), b"keep me").unwrap();
+
+        for i in 1..=8 {
+            lib.backup_to(&backups, 1_761_134_400_000 + i * 60_000, 7)
+                .unwrap();
+        }
+        let mut names: Vec<String> = fs::read_dir(&backups)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "library-20251022-120200.sqlite",
+                "library-20251022-120300.sqlite",
+                "library-20251022-120400.sqlite",
+                "library-20251022-120500.sqlite",
+                "library-20251022-120600.sqlite",
+                "library-20251022-120700.sqlite",
+                "library-20251022-120800.sqlite",
+                "library-old.sqlite.bak",
+                "notes.txt",
+            ]
+        );
+
+        // A directory that cannot be created is an error, not a panic.
+        let blocker = dir.path().join("blocker");
+        fs::write(&blocker, b"").unwrap();
+        let err = lib.backup_to(&blocker.join("backups"), 0, 7).unwrap_err();
+        assert!(matches!(err, Error::CreateDir { .. }), "{err}");
     }
 
     fn version_data(lib: &Library, version_id: i64) -> String {
