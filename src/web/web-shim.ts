@@ -4,8 +4,41 @@
 import { stockfishBridge } from './stockfish-worker-bridge'
 import { PolyglotBook, BOOK_ENTRY_SIZE } from '../shared/chess/polyglotBook'
 import { TablebaseClient } from '../shared/chess/tablebase'
+import { DatabaseClient, webDatabaseApi } from './database/client'
 
 const tablebaseClient = new TablebaseClient()
+
+// Game databases run in a worker on SQLite compiled to WebAssembly.
+const databaseClient = new DatabaseClient()
+const pickedDatabases = new Map<string, File[]>()
+
+/** Asks for a PGN, or a ChessBase database's files (.cbh, .cbg, .cba...) together. */
+function pickDatabaseFiles(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.multiple = true
+    input.accept = '.pgn,.cbh,.cbg,.cba,.cbp,.cbt,.cbc,.cbs,.cbv'
+    input.onchange = () => {
+      const files = [...(input.files ?? [])]
+      if (files.length === 0) return resolve(null)
+      const main = files.find((f) => /\.(pgn|cbh)$/i.test(f.name)) ?? files[0]
+      pickedDatabases.set(main.name, files)
+      resolve(main.name)
+    }
+    input.oncancel = () => resolve(null)
+    input.click()
+  })
+}
+
+function downloadBytes(bytes: Uint8Array, fileName: string): void {
+  const url = URL.createObjectURL(new Blob([bytes.slice()], { type: 'application/octet-stream' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 
 // Opening books work fully in the browser: the reader is plain TypeScript.
 let webBook: PolyglotBook | null = null
@@ -79,26 +112,9 @@ export function installWebShim() {
 
     engine: stockfishBridge,
 
-    database: {
-      // The SQLite engine is desktop-only for now; these stubs keep the web
-      // build functional (and crash-free) until a WASM-backed store lands.
-      openFileDialog: async () => null,
-      open: async () => ({ success: false, count: 0 }),
-      search: async () => ({ games: [], total: 0 }),
-      getGame: async () => null,
-      getOpeningStats: async () => ({
-        total: 0,
-        whiteWins: 0,
-        draws: 0,
-        blackWins: 0,
-        moves: []
-      }),
-      positionGames: async () => ({ games: [], total: 0 }),
-      addGame: async () => ({ success: false, id: -1 }),
-      deleteGame: async () => ({ success: false }),
-      playerSuggest: async () => [],
-      onImportProgress: () => () => {}
-    },
+    database: webDatabaseApi(databaseClient, pickDatabaseFiles, (token) =>
+      pickedDatabases.get(token)
+    ),
 
     book: {
       openFileDialog: pickBookFile,
@@ -116,7 +132,18 @@ export function installWebShim() {
         webBook = null
         return { success: true }
       },
-      exportFromDatabase: async () => ({ success: false, error: 'Not available on web yet' })
+      exportFromDatabase: async () => {
+        if (!databaseClient.name) return { success: false, error: 'No database open' }
+        try {
+          const bytes = await databaseClient.call('exportBook')
+          if (!bytes) return { success: false, error: 'No database open' }
+          const fileName = `${databaseClient.name.replace(/\.[^.]+$/, '') || 'book'}.bin`
+          downloadBytes(bytes, fileName)
+          return { success: true, path: fileName, entries: bytes.byteLength / BOOK_ENTRY_SIZE }
+        } catch (err) {
+          return { success: false, error: (err as Error).message }
+        }
+      }
     },
 
     tablebase: {

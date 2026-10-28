@@ -4,20 +4,22 @@ import type { SearchParams } from './types'
 
 interface GameFilterProps {
   onSearch: (params: SearchParams) => void
+  /** The filter in effect, shown when the panel is opened again. */
+  initial?: SearchParams
 }
 
 const inputCls =
   'bg-surface text-gray-200 text-[10px] px-2 py-1 rounded border border-[var(--border-color)] focus:outline-none focus:border-accent'
 
-export default function GameFilter({ onSearch }: GameFilterProps) {
+export default function GameFilter({ onSearch, initial = {} }: GameFilterProps) {
   const t = useT()
-  const [white, setWhite] = useState('')
-  const [black, setBlack] = useState('')
-  const [ignoreColors, setIgnoreColors] = useState(false)
-  const [eco, setEco] = useState('')
-  const [result, setResult] = useState('')
-  const [event, setEvent] = useState('')
-  const [minElo, setMinElo] = useState('')
+  const [white, setWhite] = useState(initial.white ?? '')
+  const [black, setBlack] = useState(initial.black ?? '')
+  const [ignoreColors, setIgnoreColors] = useState(initial.ignoreColors ?? false)
+  const [eco, setEco] = useState(initial.eco ?? '')
+  const [result, setResult] = useState(initial.result ?? '')
+  const [event, setEvent] = useState(initial.event ?? '')
+  const [minElo, setMinElo] = useState(initial.minElo ? String(initial.minElo) : '')
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()

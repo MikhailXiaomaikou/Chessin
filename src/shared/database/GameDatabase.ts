@@ -1,9 +1,8 @@
-import Database from 'better-sqlite3'
-import type { Database as Db, Statement } from 'better-sqlite3'
 import { Chess } from 'chess.js'
-import { iteratePgnFile, iteratePgnGames, type ParsedPgnGame, type PgnGameHeader } from './PgnParser'
-import { positionId, toSignedKey, PolyglotHasher } from '../../shared/chess/polyglot'
-import { writePolyglotBook } from '../../shared/chess/polyglotBook'
+import { iteratePgnGames, type ParsedPgnGame, type PgnGameHeader } from './PgnParser'
+import { positionId, toSignedKey, PolyglotHasher } from '../chess/polyglot'
+import { writePolyglotBook } from '../chess/polyglotBook'
+import type { SqlDriver, SqlStatement } from './sql'
 
 /**
  * SQLite-backed chess game database.
@@ -13,6 +12,9 @@ import { writePolyglotBook } from '../../shared/chess/polyglotBook'
  * is indexed by its Polyglot hash. That position index is what powers the two
  * features a serious database lives or dies by — position search ("show me every
  * game that reached this position") and the opening tree with W/D/L statistics.
+ *
+ * It runs on any {@link SqlDriver}: better-sqlite3 files on desktop, sql.js
+ * (WebAssembly) in the browser and on Android.
  */
 
 /** Bumped when the stored encoding changes; older indexes are rebuilt. */
@@ -221,26 +223,21 @@ interface GameQueryRow {
 }
 
 export class GameDatabase {
-  private db: Db
-  private insertPosition: Statement
-  private selPlayer: Statement
-  private insPlayer: Statement
-  private selEvent: Statement
-  private insEvent: Statement
-  private selSite: Statement
-  private insSite: Statement
-  private insGame: Statement
-  private updatePly: Statement
+  private insertPosition: SqlStatement
+  private selPlayer: SqlStatement
+  private insPlayer: SqlStatement
+  private selEvent: SqlStatement
+  private insEvent: SqlStatement
+  private selSite: SqlStatement
+  private insSite: SqlStatement
+  private insGame: SqlStatement
+  private updatePly: SqlStatement
 
   private playerCache = new Map<string, number>()
   private eventCache = new Map<string, number>()
   private siteCache = new Map<string, number>()
 
-  constructor(path: string) {
-    this.db = new Database(path)
-    this.db.pragma('journal_mode = WAL')
-    this.db.pragma('synchronous = NORMAL')
-    this.db.pragma('temp_store = MEMORY')
+  constructor(private db: SqlDriver) {
     this.db.exec(SCHEMA)
     this.db
       .prepare('INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)')
@@ -268,15 +265,15 @@ export class GameDatabase {
 
   private getId(
     cache: Map<string, number>,
-    sel: Statement,
-    ins: Statement,
+    sel: SqlStatement,
+    ins: SqlStatement,
     rawName: string | undefined
   ): number {
     const name = rawName && rawName.trim() ? rawName.trim() : '?'
     const cached = cache.get(name)
     if (cached !== undefined) return cached
     const row = sel.get(name) as { id: number } | undefined
-    const id = row ? row.id : Number(ins.run(name).lastInsertRowid)
+    const id = row ? row.id : ins.run(name).lastInsertRowid
     cache.set(name, id)
     return id
   }
@@ -302,7 +299,7 @@ export class GameDatabase {
       ply: 0,
       pgn: game.pgn
     })
-    const gameId = Number(info.lastInsertRowid)
+    const gameId = info.lastInsertRowid
 
     const ply =
       indexPositions && game.moves.length > 0
@@ -373,11 +370,6 @@ export class GameDatabase {
     return n
   }
 
-  /** Import all games from a PGN file, streaming it line by line. */
-  async importPgnFile(filePath: string, opts: ImportOptions = {}): Promise<number> {
-    return this.importGames(iteratePgnFile(filePath), opts)
-  }
-
   /**
    * Import parsed games from any source — a PGN stream, a ChessBase reader —
    * committing every 2000 games.
@@ -410,15 +402,24 @@ export class GameDatabase {
 
   /** Import header-only games (e.g. decoded from a ChessBase index with no movetext). */
   importHeaderGames(headerList: PgnGameHeader[]): number {
-    let n = 0
-    const tx = this.db.transaction((list: PgnGameHeader[]) => {
-      for (const headers of list) {
+    return this.transaction(() => {
+      for (const headers of headerList) {
         this.addParsedGame({ headers, moves: [], movetext: '', pgn: '' }, false)
-        n++
       }
+      return headerList.length
     })
-    tx(headerList)
-    return n
+  }
+
+  private transaction<T>(fn: () => T): T {
+    this.db.exec('BEGIN')
+    try {
+      const result = fn()
+      this.db.exec('COMMIT')
+      return result
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
   }
 
   count(): number {
@@ -521,7 +522,7 @@ export class GameDatabase {
          ORDER BY g.id
          LIMIT @_limit OFFSET @_offset`
       )
-      .all({ ...bind, _limit: limit, _offset: offset }) as GameQueryRow[]
+      .all<GameQueryRow>({ ...bind, _limit: limit, _offset: offset })
 
     return { games: rows.map((r) => this.rowToGame(r)), total }
   }
@@ -658,27 +659,24 @@ export class GameDatabase {
          ORDER BY g.date_key DESC, g.id DESC
          LIMIT ? OFFSET ?`
       )
-      .all(hash, limit, offset) as GameQueryRow[]
+      .all<GameQueryRow>(hash, limit, offset)
     return { games: rows.map((r) => this.rowToGame(r)), total }
   }
 
   /** Add a single game from PGN text. Returns the new game id (or -1 if none parsed). */
   addGamePgn(pgn: string, indexPositions = true): number {
-    const games = iteratePgnGames(pgn)
-    const tx = this.db.transaction(() => {
+    return this.transaction(() => {
       let id = -1
-      for (const g of games) id = this.addParsedGame(g, indexPositions)
+      for (const g of iteratePgnGames(pgn)) id = this.addParsedGame(g, indexPositions)
       return id
     })
-    return tx()
   }
 
   deleteGame(id: number): void {
-    const tx = this.db.transaction(() => {
+    this.transaction(() => {
       this.db.prepare('DELETE FROM positions WHERE game_id = ?').run(id)
       this.db.prepare('DELETE FROM games WHERE id = ?').run(id)
     })
-    tx()
   }
 
   /**
@@ -698,17 +696,17 @@ export class GameDatabase {
        FROM positions p JOIN games g ON g.id = p.game_id
        WHERE p.move IS NOT NULL AND p.ply < ?
        GROUP BY p.hash, p.move
-       HAVING COUNT(*) >= ?`
+       HAVING COUNT(*) >= ?`,
+      { bigInts: true } // 64-bit hashes must come back as exact BigInts
     )
-    stmt.safeIntegers(true) // 64-bit hashes must come back as exact BigInts
-    const rows = stmt.all(maxPly, minGames) as {
+    const rows = stmt.all<{
       hash: bigint
       move: bigint
       stm: bigint
       c: bigint
       wpts: bigint
       bpts: bigint
-    }[]
+    }>(maxPly, minGames)
 
     const byKey = new Map<bigint, { move: number; raw: number }[]>()
     for (const r of rows) {

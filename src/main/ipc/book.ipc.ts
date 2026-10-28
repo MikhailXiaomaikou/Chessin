@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'fs/promises'
 import { basename } from 'path'
 import { PolyglotBook, BOOK_ENTRY_SIZE } from '../../shared/chess/polyglotBook'
 import { DatabaseManager } from '../database/DatabaseManager'
-import type { BookExportOptions } from '../database/GameDatabase'
+import type { BookExportOptions } from '../../shared/database/GameDatabase'
 import { IPC } from '../../shared/ipc-channels'
 
 let book: PolyglotBook | null = null

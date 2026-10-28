@@ -1,7 +1,3 @@
-import { readFile, writeFile } from 'fs/promises'
-import { createReadStream } from 'fs'
-import { createInterface } from 'readline'
-
 /**
  * PGN parsing.
  *
@@ -10,9 +6,8 @@ import { createInterface } from 'readline'
  * comments and NAGs) so they can be replayed for position indexing, while
  * keeping the original movetext intact for faithful re-display.
  *
- * Both a synchronous string parser and an async file streamer are provided; the
- * streamer reads line-by-line so importing a multi-gigabyte database never loads
- * the whole file into memory.
+ * Games come from a string or from any stream of lines, so importing a
+ * multi-gigabyte file (a Node read stream, a browser File) never loads it whole.
  */
 
 export interface PgnGameHeader {
@@ -212,7 +207,7 @@ class PgnAssembler {
 /** Iterate games from an in-memory PGN string. */
 export function* iteratePgnGames(content: string): Generator<ParsedPgnGame> {
   const asm = new PgnAssembler()
-  const lines = content.replace(/^﻿/, '').split(/\r?\n/)
+  const lines = content.replace(/^\uFEFF/, '').split(/\r?\n/)
   for (const line of lines) {
     const game = asm.push(line)
     if (game) yield game
@@ -221,14 +216,15 @@ export function* iteratePgnGames(content: string): Generator<ParsedPgnGame> {
   if (last) yield last
 }
 
-/** Iterate games from a PGN file without loading it all into memory. */
-export async function* iteratePgnFile(filePath: string): AsyncGenerator<ParsedPgnGame> {
-  const rl = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
+/** Iterate games from a stream of lines, e.g. a file read piece by piece. */
+export async function* iteratePgnLines(
+  lines: AsyncIterable<string> | Iterable<string>
+): AsyncGenerator<ParsedPgnGame> {
   const asm = new PgnAssembler()
-  for await (const line of rl) {
+  let first = true
+  for await (const raw of lines) {
+    const line = first ? raw.replace(/^\uFEFF/, '') : raw
+    first = false
     const game = asm.push(line)
     if (game) yield game
   }
@@ -251,16 +247,6 @@ export function parsePgnString(content: string): PgnGame[] {
     moves: g.movetext,
     raw: g.pgn
   }))
-}
-
-export async function parsePgnFile(filePath: string): Promise<PgnGame[]> {
-  const content = await readFile(filePath, 'utf-8')
-  return parsePgnString(content)
-}
-
-export async function writePgnFile(filePath: string, games: PgnGame[]): Promise<void> {
-  const content = games.map((g) => g.raw).join('\n\n')
-  await writeFile(filePath, content, 'utf-8')
 }
 
 export function createPgn(headers: PgnGameHeader, movetext: string): string {

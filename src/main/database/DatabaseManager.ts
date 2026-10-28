@@ -11,7 +11,9 @@ import {
   type OpeningMove,
   type PositionStats,
   type BookExportOptions
-} from './GameDatabase'
+} from '../../shared/database/GameDatabase'
+import { openSqliteFile } from './sqliteDriver'
+import { iteratePgnFile } from './pgnFile'
 import { ChessBaseReader, type CbGame, type CbSkipReason } from '../../shared/chessbase/reader'
 import { openChessBaseFiles } from './ChessBaseFiles'
 import { extractCbv } from './CbvReader'
@@ -71,6 +73,11 @@ function sourceSignature(paths: string[]): string {
   )
 }
 
+/** A native SQLite index file (created if missing). */
+function openIndex(path: string): GameDatabase {
+  return new GameDatabase(openSqliteFile(path))
+}
+
 function parseSkipped(json: string | undefined): SkipCounts | undefined {
   if (!json) return undefined
   try {
@@ -122,7 +129,7 @@ export class DatabaseManager {
     if (!existsSync(cachePath)) return null
     let db: GameDatabase | null = null
     try {
-      db = new GameDatabase(cachePath)
+      db = openIndex(cachePath)
       if (
         db.count() > 0 &&
         db.schemaVersion() >= SCHEMA_VERSION &&
@@ -157,7 +164,7 @@ export class DatabaseManager {
 
   private openNative(filePath: string): OpenResult {
     this.close()
-    this.db = new GameDatabase(filePath)
+    this.db = openIndex(filePath)
     this.currentName = basename(filePath)
     return { count: this.db.count(), name: this.currentName, dbPath: filePath, imported: false }
   }
@@ -176,9 +183,9 @@ export class DatabaseManager {
     }
 
     this.removeCacheFiles(cachePath)
-    this.db = new GameDatabase(cachePath)
+    this.db = openIndex(cachePath)
     try {
-      await this.db.importPgnFile(filePath, { onProgress })
+      await this.db.importGames(iteratePgnFile(filePath), { onProgress })
     } catch (err) {
       this.discard(cachePath)
       throw err
@@ -217,7 +224,7 @@ export class DatabaseManager {
       }
 
       this.removeCacheFiles(cachePath)
-      this.db = new GameDatabase(cachePath)
+      this.db = openIndex(cachePath)
       const skipped: SkipCounts = {}
       try {
         const games = chessBaseGames(new ChessBaseReader(cb.files), (reason) => {

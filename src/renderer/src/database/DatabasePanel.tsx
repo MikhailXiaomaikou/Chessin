@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import GameList from './GameList'
 import GameFilter from './GameFilter'
 import { useGameStore } from '@renderer/stores/gameStore'
@@ -11,17 +11,24 @@ const PAGE_SIZE = 100
 
 export default function DatabasePanel() {
   const t = useT()
+  // What is open, and the list's filter, page and selection, outlive this panel:
+  // switching tabs unmounts it.
+  const dbName = useDatabaseStore((s) => s.name)
+  const epoch = useDatabaseStore((s) => s.epoch)
+  const importing = useDatabaseStore((s) => s.importing)
+  const setImporting = useDatabaseStore((s) => s.setImporting)
+  const query = useDatabaseStore((s) => s.query)
+  const page = useDatabaseStore((s) => s.page)
+  const selectedId = useDatabaseStore((s) => s.selectedId)
   const setOpened = useDatabaseStore((s) => s.setOpened)
-  const [isOpen, setIsOpen] = useState(false)
+  const setQuery = useDatabaseStore((s) => s.setQuery)
+  const setSelectedId = useDatabaseStore((s) => s.setSelectedId)
+  const isOpen = dbName !== ''
   const [games, setGames] = useState<DbGame[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [importCount, setImportCount] = useState<number | null>(null)
-  const [dbName, setDbName] = useState('')
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [importCount, setImportCount] = useState(0)
   const [notice, setNotice] = useState('')
-  const paramsRef = useRef<SearchParams>({})
 
   // Forward import progress from the main process.
   useEffect(() => {
@@ -39,10 +46,16 @@ export default function DatabasePanel() {
     })
     setGames(res.games)
     setTotal(res.total)
-    setPage(nextPage)
-    paramsRef.current = params
+    setQuery(params, nextPage)
     setLoading(false)
-  }, [])
+  }, [setQuery])
+
+  // List the open database: when one is opened, and as it was left when
+  // coming back to this tab.
+  useEffect(() => {
+    const { name, query: q, page: p } = useDatabaseStore.getState()
+    if (name) runSearch(q, p)
+  }, [epoch, runSearch])
 
   const handleOpenDatabase = useCallback(async () => {
     if (!window.electronAPI?.database) return
@@ -50,12 +63,11 @@ export default function DatabasePanel() {
     if (!filePath) return
     setLoading(true)
     setImportCount(0)
+    setImporting(true)
     const result = await window.electronAPI.database.open(filePath)
-    setImportCount(null)
+    setImporting(false)
     if (result.success) {
-      setDbName(result.name || filePath.split(/[/\\]/).pop() || filePath)
-      setIsOpen(true)
-      setOpened(result.name || '', result.count || 0)
+      setOpened(result.name || filePath.split(/[/\\]/).pop() || filePath, result.count || 0)
       // Say what a ChessBase import left out, so a lower count isn't a mystery.
       const skipped = Object.entries(result.skipped ?? {}).filter(([, n]) => (n ?? 0) > 0)
       if (skipped.length) {
@@ -64,13 +76,12 @@ export default function DatabasePanel() {
         setNotice(`${t('db.skipped')} ${total.toLocaleString()}: ${parts.join(' · ')}`)
         setTimeout(() => setNotice(''), 10000)
       }
-      await runSearch({}, 0)
     } else {
       setLoading(false)
       // eslint-disable-next-line no-alert
       alert(result.error || 'Failed to open database')
     }
-  }, [runSearch, setOpened])
+  }, [setImporting, setOpened, t])
 
   const handleSearch = useCallback((params: SearchParams) => runSearch(params, 0), [runSearch])
 
@@ -79,7 +90,7 @@ export default function DatabasePanel() {
     setSelectedId(id)
     const game = await window.electronAPI.database.getGame(id)
     if (game?.pgn) useGameStore.getState().loadPgn(game.pgn)
-  }, [])
+  }, [setSelectedId])
 
   const handleExportBook = useCallback(async () => {
     if (!window.electronAPI?.book) return
@@ -98,7 +109,7 @@ export default function DatabasePanel() {
   if (!isOpen) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4">
-        {importCount !== null ? (
+        {importing ? (
           <>
             <p className="text-sm text-gray-400 mb-1">{t('db.importing')}</p>
             <p className="text-xs text-accent tabular-nums">
@@ -115,7 +126,7 @@ export default function DatabasePanel() {
               {t('db.openDatabase')}
             </button>
             <p className="text-[10px] text-gray-600 mt-2 text-center">
-              {t('db.supportedFormats')}
+              {t(window.electronAPI?.platform === 'web' ? 'db.supportedFormatsWeb' : 'db.supportedFormats')}
             </p>
           </>
         )}
@@ -152,7 +163,8 @@ export default function DatabasePanel() {
           {notice}
         </div>
       )}
-      <GameFilter onSearch={handleSearch} />
+      {/* A new database starts with an empty filter. */}
+      <GameFilter key={epoch} onSearch={handleSearch} initial={query} />
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
           <span className="text-xs text-gray-500">{t('db.loading')}</span>
@@ -169,7 +181,7 @@ export default function DatabasePanel() {
         <div className="flex items-center justify-between px-3 py-1.5 border-t border-[var(--border-color)] text-[10px] text-gray-500">
           <button
             disabled={page === 0}
-            onClick={() => runSearch(paramsRef.current, page - 1)}
+            onClick={() => runSearch(query, page - 1)}
             className="px-2 py-0.5 rounded disabled:opacity-30 hover:text-gray-300 transition-colors"
           >
             ‹ {t('db.prev')}
@@ -179,7 +191,7 @@ export default function DatabasePanel() {
           </span>
           <button
             disabled={page >= pageCount - 1}
-            onClick={() => runSearch(paramsRef.current, page + 1)}
+            onClick={() => runSearch(query, page + 1)}
             className="px-2 py-0.5 rounded disabled:opacity-30 hover:text-gray-300 transition-colors"
           >
             {t('db.next')} ›

@@ -3,8 +3,12 @@ import { writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { Chess } from 'chess.js'
-import { GameDatabase } from './GameDatabase'
+import initSqlJs from 'sql.js'
+import { GameDatabase } from '../../shared/database/GameDatabase'
+import { sqlJsDriver } from '../../shared/database/sqlJsDriver'
 import { PolyglotBook } from '../../shared/chess/polyglotBook'
+import { openSqliteFile } from './sqliteDriver'
+import { iteratePgnFile } from './pgnFile'
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
@@ -53,11 +57,19 @@ const SAMPLE = `[Event "Open"]
 
 1. d4 d5 1/2-1/2`
 
-describe('GameDatabase', () => {
+const SQL = await initSqlJs()
+
+// The same engine runs on the desktop driver and on the WebAssembly one.
+const DRIVERS: [string, () => GameDatabase][] = [
+  ['better-sqlite3', () => new GameDatabase(openSqliteFile(':memory:'))],
+  ['sql.js', () => new GameDatabase(sqlJsDriver(new SQL.Database()))]
+]
+
+describe.each(DRIVERS)('GameDatabase on %s', (_driver, openDb) => {
   let db: GameDatabase
 
   beforeEach(() => {
-    db = new GameDatabase(':memory:')
+    db = openDb()
     db.importPgnString(SAMPLE)
   })
 
@@ -144,7 +156,7 @@ describe('GameDatabase', () => {
   })
 
   it('finds games by position including transpositions', () => {
-    const db2 = new GameDatabase(':memory:')
+    const db2 = openDb()
     db2.importPgnString(`[White "A"]
 [Black "B"]
 [Result "*"]
@@ -185,9 +197,9 @@ describe('GameDatabase', () => {
   it('imports from a file via the streaming path and reports progress', async () => {
     const path = join(tmpdir(), `chessin-test-${process.pid}-${db.count()}.pgn`)
     writeFileSync(path, SAMPLE, 'utf-8')
-    const fileDb = new GameDatabase(':memory:')
+    const fileDb = openDb()
     let lastProgress = 0
-    const added = await fileDb.importPgnFile(path, {
+    const added = await fileDb.importGames(iteratePgnFile(path), {
       onProgress: (n) => {
         lastProgress = n
       }
@@ -220,7 +232,7 @@ describe('GameDatabase', () => {
   })
 
   it('exports castling in Polyglot king-takes-rook form', () => {
-    const castled = new GameDatabase(':memory:')
+    const castled = openDb()
     castled.importPgnString(`[White "A"]
 [Black "B"]
 [Result "1-0"]

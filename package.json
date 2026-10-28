@@ -29,6 +29,7 @@
     "chessground": "^9.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "sql.js": "^1.14.2",
     "stockfish.js": "^10.0.2",
     "zustand": "^5.0.3"
   },
@@ -36,6 +37,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "electron": "^33.3.1",
