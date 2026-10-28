@@ -16,8 +16,11 @@ export const NAG_SYMBOLS: Record<number, string> = {
   4: '??',
   5: '!?',
   6: '?!',
-  7: '□', // forced move
+  7: '□', // only move
+  8: '□', // singular move
   10: '=', // equal
+  11: '=', // equal, quiet position
+  12: '=', // equal, active position
   13: '∞', // unclear
   14: '⩲', // slight advantage white
   15: '⩱', // slight advantage black
@@ -25,12 +28,27 @@ export const NAG_SYMBOLS: Record<number, string> = {
   17: '∓', // moderate advantage black
   18: '+-', // decisive advantage white
   19: '-+', // decisive advantage black
-  22: '⨀', // zugzwang
-  32: '⟳', // development advantage
-  36: '→', // initiative
-  40: '↑', // attack
-  132: '⇆', // counterplay
-  138: '⨁' // time trouble
+  22: '⨀', // zugzwang (white)
+  23: '⨀', // zugzwang (black)
+  32: '⟳', // development advantage (white)
+  33: '⟳', // development advantage (black)
+  36: '↑', // initiative (white)
+  37: '↑', // initiative (black)
+  40: '→', // attack (white)
+  41: '→', // attack (black)
+  44: '=∞', // compensation (white)
+  45: '=∞', // compensation (black)
+  132: '⇆', // counterplay (white)
+  133: '⇆', // counterplay (black)
+  138: '⨁', // time trouble (white)
+  139: '⨁', // time trouble (black)
+  140: '∆', // with the idea
+  141: '∇', // aimed against
+  142: '⌓', // better is
+  143: '≤', // worse is
+  144: '=', // equivalent is
+  145: 'RR', // editorial comment
+  146: 'N' // novelty
 }
 
 export const BOARD_THEMES = {

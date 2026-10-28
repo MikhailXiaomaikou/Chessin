@@ -10,7 +10,7 @@ export function useGameAnalysis() {
   const abortRef = useRef(false)
 
   const analyzeGame = useCallback(async (depth: number = 18) => {
-    const { moveHistory } = useGameStore.getState()
+    const { moveHistory, startFen } = useGameStore.getState()
     if (moveHistory.length === 0) return
 
     const engines = useEngineStore.getState().engines
@@ -31,7 +31,6 @@ export function useGameAnalysis() {
     // 2. Requesting depth-limited search
     // 3. Waiting for bestmove + collecting info lines
 
-    const chess = new Chess()
     let prevScore = 0 // centipawns, from white's perspective
 
     for (let i = 0; i < totalMoves; i++) {
@@ -39,13 +38,12 @@ export function useGameAnalysis() {
 
       setAnalysisProgress(i, totalMoves)
 
-      // Position before this move
-      const posFen = chess.fen()
-      const turn = chess.turn() // who is about to play move i
-
-      // Make the move
+      // The tree stores every position, so a set-up start or a null move needs no replaying.
       const move = moveHistory[i]
-      chess.move({ from: move.from, to: move.to, promotion: move.promotion })
+      const posFen = i === 0 ? startFen : moveHistory[i - 1].fen
+      if (!move.from) continue // a null move has nothing to judge
+      const turn = posFen.split(' ')[1] as 'w' | 'b' // who is about to play move i
+      const chess = new Chess(move.fen)
 
       // Analyze the position BEFORE the move to find engine's best
       const result = await analyzePosition(activeEngine.id, posFen, depth)

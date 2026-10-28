@@ -78,9 +78,10 @@ export default function ReferencePanel() {
     }
   }
 
+  // Open the game at the position being studied, not at its end.
   const loadGame = async (id: number) => {
     const game = await window.electronAPI.database.getGame(id)
-    if (game?.pgn) useGameStore.getState().loadPgn(game.pgn)
+    if (game?.pgn) useGameStore.getState().loadPgn(game.pgn, { goToFen: fen })
   }
 
   if (!dbName) {

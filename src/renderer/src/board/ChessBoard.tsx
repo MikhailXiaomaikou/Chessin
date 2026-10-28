@@ -7,6 +7,11 @@ import { useGameStore } from '@renderer/stores/gameStore'
 import { useUIStore } from '@renderer/stores/uiStore'
 import { useEngineStore, ENGINE_COLORS } from '@renderer/stores/engineStore'
 import { useSounds } from '@renderer/board/hooks/useSounds'
+import {
+  parseCommentShapes,
+  type CommentShape,
+  type ShapeColor
+} from '@shared/chess/commentShapes'
 import 'chessground/assets/chessground.base.css'
 import 'chessground/assets/chessground.brown.css'
 import 'chessground/assets/chessground.cburnett.css'
@@ -14,6 +19,26 @@ import 'chessground/assets/chessground.cburnett.css'
 // Map engine colors to chessground brush names.
 // We use built-in brushes + custom brush via color hex.
 const BRUSH_NAMES = ['green', 'blue', 'yellow', 'red', 'green', 'blue'] as const
+
+// Squares and arrows drawn on a position live in its move's comment ([%csl]/[%cal]).
+const SHAPE_BRUSHES: Record<ShapeColor, string> = { G: 'green', R: 'red', Y: 'yellow', B: 'blue' }
+const SHAPE_COLORS: Record<string, ShapeColor> = { green: 'G', red: 'R', yellow: 'Y', blue: 'B' }
+
+function toDrawShapes(comment: string | undefined): DrawShape[] {
+  return parseCommentShapes(comment).map((s) => ({
+    orig: s.orig as Key,
+    dest: s.dest as Key | undefined,
+    brush: SHAPE_BRUSHES[s.color]
+  }))
+}
+
+function toCommentShapes(shapes: DrawShape[]): CommentShape[] {
+  return shapes.flatMap((s) => {
+    const color = SHAPE_COLORS[s.brush ?? '']
+    if (!color) return []
+    return [s.dest && s.dest !== s.orig ? { orig: s.orig, dest: s.dest, color } : { orig: s.orig, color }]
+  })
+}
 
 export default function ChessBoard() {
   const boardRef = useRef<HTMLDivElement>(null)
@@ -23,6 +48,9 @@ export default function ChessBoard() {
   const turn = useGameStore((s) => s.turn)
   const isCheck = useGameStore((s) => s.isCheck)
   const lastMove = useGameStore((s) => s.lastMove)
+  const annotation = useGameStore((s) =>
+    s.currentNodeId ? s.treeNodes[s.currentNodeId]?.comment : s.gameComment
+  )
   const orientation = useGameStore((s) => s.orientation)
   const isGameOver = useGameStore((s) => s.isGameOver)
   const makeMove = useGameStore((s) => s.makeMove)
@@ -37,6 +65,8 @@ export default function ChessBoard() {
   const isAnalyzing = useEngineStore((s) => s.isAnalyzing)
 
   const playSound = useSounds()
+  // Set by a left press on the board, which makes chessground erase drawn shapes.
+  const leftPressRef = useRef(false)
 
   const toDests = useCallback((): Map<Key, Key[]> => {
     const dests = getAllLegalDests()
@@ -102,7 +132,19 @@ export default function ChessBoard() {
       },
       drawable: {
         enabled: true,
-        visible: true
+        visible: true,
+        eraseOnClick: false,
+        shapes: toDrawShapes(annotation),
+        onChange: (shapes) => {
+          const { currentNodeId, treeNodes, gameComment, setShapes } = useGameStore.getState()
+          if (shapes.length === 0 && leftPressRef.current) {
+            // A stray click must not wipe an annotator's arrows: put them back.
+            const comment = currentNodeId ? treeNodes[currentNodeId]?.comment : gameComment
+            cgRef.current?.setShapes(toDrawShapes(comment))
+            return
+          }
+          setShapes(currentNodeId, toCommentShapes(shapes))
+        }
       },
       coordinates: showCoordinates,
       lastMove: lastMove ? [lastMove.from as Key, lastMove.to as Key] : undefined,
@@ -138,6 +180,11 @@ export default function ChessBoard() {
       coordinates: showCoordinates
     })
   }, [fen, turn, isCheck, lastMove, isGameOver, showCoordinates, showLegalMoves, toDests])
+
+  // Show the current position's annotation shapes
+  useEffect(() => {
+    cgRef.current?.setShapes(toDrawShapes(annotation))
+  }, [annotation])
 
   // Sync orientation
   useEffect(() => {
@@ -204,6 +251,12 @@ export default function ChessBoard() {
   return (
     <div
       ref={boardRef}
+      onMouseDownCapture={(e) => {
+        leftPressRef.current = e.button === 0
+      }}
+      onTouchStartCapture={() => {
+        leftPressRef.current = true
+      }}
       style={{
         width: 'var(--board-size)',
         height: 'var(--board-size)',

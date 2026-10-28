@@ -61,6 +61,7 @@ const en = {
   'import.fenPlaceholder': 'Paste FEN here...\n\nrnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
   'import.openFile': 'Open File...',
   'import.invalidFen': 'Invalid FEN string',
+  'import.invalidPgn': 'No legal moves could be read from this PGN',
 
   // Game analysis
   'analysis.analyzeGame': 'Full Analysis',
@@ -85,6 +86,7 @@ const en = {
   'game.moves': 'Moves',
   'game.move': 'Move ',
   'game.ready': 'Ready',
+  'game.round': 'Round',
 
   // NewGameDialog
   'newGame.title': 'New Game',
@@ -113,6 +115,8 @@ const en = {
   'comment.placeholder': 'Add a comment...',
   'comment.cancel': 'Cancel',
   'comment.save': 'Save',
+  'comment.add': 'Add comment',
+  'comment.edit': 'Edit comment',
 
   // EnginePanel
   'engine.title': 'Engine',
@@ -225,7 +229,8 @@ const en = {
 
   // Variations
   'variation.promote': 'Promote to main line',
-  'variation.delete': 'Delete variation'
+  'variation.delete': 'Delete variation',
+  'variation.deleteFromHere': 'Delete from here'
 } as const
 
 type Translations = Record<keyof typeof en, string>
@@ -293,6 +298,7 @@ const zh: Translations = {
   'import.fenPlaceholder': '在此粘贴 FEN...\n\nrnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
   'import.openFile': '打开文件...',
   'import.invalidFen': '无效的 FEN 字符串',
+  'import.invalidPgn': '无法从该 PGN 中读取任何合法着法',
 
   // Game analysis
   'analysis.analyzeGame': '全局分析',
@@ -317,6 +323,7 @@ const zh: Translations = {
   'game.moves': '步',
   'game.move': '第 ',
   'game.ready': '就绪',
+  'game.round': '轮次',
 
   // NewGameDialog
   'newGame.title': '新对局',
@@ -345,6 +352,8 @@ const zh: Translations = {
   'comment.placeholder': '添加评注...',
   'comment.cancel': '取消',
   'comment.save': '保存',
+  'comment.add': '添加评注',
+  'comment.edit': '编辑评注',
 
   // EnginePanel
   'engine.title': '引擎',
@@ -457,7 +466,8 @@ const zh: Translations = {
 
   // Variations
   'variation.promote': '提升为主线',
-  'variation.delete': '删除变着'
+  'variation.delete': '删除变着',
+  'variation.deleteFromHere': '从此处删除'
 }
 
 export const locales = { en, zh } as const

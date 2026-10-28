@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { Fragment, useEffect, useRef, useMemo, useState, type ReactNode } from 'react'
 import { useGameStore, type MoveTreeNode } from '@renderer/stores/gameStore'
 import {
   useAnalysisStore,
@@ -6,27 +6,15 @@ import {
   CLASSIFICATION_SYMBOLS
 } from '@renderer/stores/analysisStore'
 import { useT } from '@renderer/i18n/useI18n'
+import { NAG_SYMBOLS } from '@shared/constants'
+import { commentText } from '@shared/chess/commentShapes'
+import CommentEditor from './CommentEditor'
 
-// Token types for flat rendering of the move tree
-interface MoveToken {
-  type: 'move'
-  node: MoveTreeNode
-  isWhite: boolean
-  moveNumber: number
-  showNumber: boolean // whether to display the move number prefix
-}
+// Quick annotations offered in the context menu: move marks, then evaluations.
+const MOVE_MARKS = [1, 2, 3, 4, 5, 6]
+const EVALUATIONS = [10, 13, 14, 15, 16, 17, 18, 19]
 
-interface VarStartToken {
-  type: 'varStart'
-  depth: number
-}
-
-interface VarEndToken {
-  type: 'varEnd'
-  depth: number
-}
-
-type Token = MoveToken | VarStartToken | VarEndToken
+const nagText = (nag: number): string => NAG_SYMBOLS[nag] ?? `$${nag}`
 
 // Get move info (color, number) from a node's parent FEN
 function getMoveInfo(
@@ -41,63 +29,14 @@ function getMoveInfo(
   return { isWhite: turn === 'w', moveNumber: fullmove }
 }
 
-// Tokenize the tree into a flat list for rendering
-function tokenize(
-  nodeIds: string[],
-  nodes: Record<string, MoveTreeNode>,
-  startFen: string,
-  depth: number,
-  forceNumber: boolean
-): Token[] {
-  if (nodeIds.length === 0) return []
-
-  const tokens: Token[] = []
-  const mainId = nodeIds[0]
-  const variations = nodeIds.slice(1)
-  const mainNode = nodes[mainId]
-  if (!mainNode) return []
-
-  const info = getMoveInfo(mainNode, nodes, startFen)
-
-  tokens.push({
-    type: 'move',
-    node: mainNode,
-    isWhite: info.isWhite,
-    moveNumber: info.moveNumber,
-    showNumber: info.isWhite || forceNumber
-  })
-
-  // Render variations (siblings)
-  for (const varId of variations) {
-    const varNode = nodes[varId]
-    if (!varNode) continue
-    tokens.push({ type: 'varStart', depth: depth + 1 })
-
-    const varInfo = getMoveInfo(varNode, nodes, startFen)
-    tokens.push({
-      type: 'move',
-      node: varNode,
-      isWhite: varInfo.isWhite,
-      moveNumber: varInfo.moveNumber,
-      showNumber: true // always show number at start of variation
-    })
-
-    if (varNode.children.length > 0) {
-      tokens.push(...tokenize(varNode.children, nodes, startFen, depth + 1, false))
-    }
-
-    tokens.push({ type: 'varEnd', depth: depth + 1 })
-  }
-
-  // Continue main line
-  if (mainNode.children.length > 0) {
-    tokens.push(
-      ...tokenize(mainNode.children, nodes, startFen, depth, variations.length > 0)
-    )
-  }
-
-  return tokens
+interface MenuState {
+  x: number
+  y: number
+  nodeId: string
 }
+
+// undefined = not editing; null = the game comment; else a node ID.
+type EditTarget = string | null | undefined
 
 export default function MoveList() {
   const t = useT()
@@ -105,19 +44,48 @@ export default function MoveList() {
   const rootChildren = useGameStore((s) => s.rootChildren)
   const startFen = useGameStore((s) => s.startFen)
   const currentNodeId = useGameStore((s) => s.currentNodeId)
+  const gameComment = useGameStore((s) => s.gameComment)
   const goToNode = useGameStore((s) => s.goToNode)
   const promoteVariation = useGameStore((s) => s.promoteVariation)
   const deleteVariation = useGameStore((s) => s.deleteVariation)
+  const setComment = useGameStore((s) => s.setComment)
+  const toggleNag = useGameStore((s) => s.toggleNag)
   const moveEvals = useAnalysisStore((s) => s.moveEvals)
   const moveHistory = useGameStore((s) => s.moveHistory)
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeMoveRef = useRef<HTMLSpanElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menu, setMenu] = useState<MenuState | null>(null)
+  const [editing, setEditing] = useState<EditTarget>(undefined)
 
   useEffect(() => {
     if (activeMoveRef.current && scrollRef.current) {
       activeMoveRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
   }, [currentNodeId])
+
+  // Close the context menu on a click elsewhere or Escape.
+  useEffect(() => {
+    if (!menu) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenu(null)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenu(null)
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [menu])
+
+  // A different game: drop any open editor or menu.
+  useEffect(() => {
+    setMenu(null)
+    setEditing(undefined)
+  }, [rootChildren])
 
   // Build eval map: moveIndex in current line -> eval data
   const evalMap = useMemo(
@@ -134,12 +102,129 @@ export default function MoveList() {
     return map
   }, [moveHistory])
 
-  const tokens = useMemo(
-    () => tokenize(rootChildren, treeNodes, startFen, 0, true),
-    [rootChildren, treeNodes, startFen]
+  const isVariation = (node: MoveTreeNode): boolean => {
+    const siblings = node.parentId === null ? rootChildren : treeNodes[node.parentId]?.children || []
+    return siblings.indexOf(node.id) > 0
+  }
+
+  const editor = (target: string | null, comment: string | undefined): ReactNode => (
+    <CommentEditor
+      comment={commentText(comment)}
+      onSave={(text) => {
+        setComment(target, text)
+        setEditing(undefined)
+      }}
+      onCancel={() => setEditing(undefined)}
+    />
   )
 
-  if (rootChildren.length === 0) {
+  const commentSpan = (text: string, onEdit?: () => void): ReactNode => (
+    <span
+      onDoubleClick={onEdit}
+      className="font-sans text-[0.9em] text-[#8fb3d9] mr-1.5 break-words"
+      title={onEdit ? t('comment.edit') : undefined}
+    >
+      {text}
+    </span>
+  )
+
+  const renderMove = (node: MoveTreeNode, forceNumber: boolean, inVariation: boolean): ReactNode => {
+    const { isWhite, moveNumber } = getMoveInfo(node, treeNodes, startFen)
+    const showNumber = isWhite || forceNumber || !!node.commentBefore
+    const isActive = node.id === currentNodeId
+
+    // Look up eval for this node
+    const lineIdx = moveHistoryNodeEvals.get(node.id)
+    const ev = lineIdx !== undefined ? evalMap.get(lineIdx) : undefined
+    const symbol = ev ? CLASSIFICATION_SYMBOLS[ev.classification] : ''
+    const color = ev ? CLASSIFICATION_COLORS[ev.classification] : undefined
+
+    const nags = node.nags ?? []
+    const marks = nags.filter((n) => n < 10).map(nagText).join('')
+    const others = nags.filter((n) => n >= 10).map(nagText).join(' ')
+    const before = commentText(node.commentBefore)
+    const after = commentText(node.comment)
+
+    return (
+      <Fragment key={node.id}>
+        {before && commentSpan(before)}
+        <span className="whitespace-nowrap">
+          {showNumber && (
+            <span className="text-gray-500 select-none mr-0.5">
+              {moveNumber}.{!isWhite && '..'}
+            </span>
+          )}
+          <span
+            ref={isActive ? activeMoveRef : undefined}
+            onClick={() => goToNode(node.id)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setMenu({ x: e.clientX, y: e.clientY, nodeId: node.id })
+            }}
+            className={`px-1 py-0.5 rounded cursor-pointer transition-colors ${
+              isActive
+                ? 'bg-accent text-white'
+                : inVariation
+                  ? 'text-gray-400 hover:bg-surface-tertiary'
+                  : 'text-gray-200 hover:bg-surface-tertiary'
+            }`}
+          >
+            {node.san}
+            {marks && (
+              <span className={isActive ? 'text-white' : 'text-yellow-400'}>{marks}</span>
+            )}
+            {symbol && (
+              <span
+                className="text-xs font-bold ml-0.5"
+                style={{ color: isActive ? '#fff' : color }}
+              >
+                {symbol}
+              </span>
+            )}
+          </span>
+          {others && <span className="text-gray-400 ml-0.5">{others}</span>}
+        </span>{' '}
+        {editing === node.id
+          ? editor(node.id, node.comment)
+          : after && commentSpan(after, () => setEditing(node.id))}
+      </Fragment>
+    )
+  }
+
+  // Main line moves stay inline; a variation of the main line gets its own
+  // indented block, and deeper ones go in parentheses within it.
+  const renderLine = (ids: string[], depth: number, forceNumber: boolean, out: ReactNode[]) => {
+    let siblings = ids
+    let force = forceNumber
+    while (siblings.length > 0) {
+      const main = treeNodes[siblings[0]]
+      if (!main) break
+      out.push(renderMove(main, force, depth > 0))
+      const variations = siblings.slice(1)
+      for (const id of variations) {
+        const inner: ReactNode[] = []
+        renderLine([id], depth + 1, true, inner)
+        out.push(
+          depth === 0 ? (
+            <div
+              key={`v${id}`}
+              className="pl-3 my-1 border-l-2 border-[var(--border-color)] text-[0.92em]"
+            >
+              {inner}
+            </div>
+          ) : (
+            <span key={`v${id}`} className="text-gray-500">
+              ( {inner}){' '}
+            </span>
+          )
+        )
+      }
+      force = variations.length > 0 || !!commentText(main.comment) || editing === main.id
+      siblings = main.children
+    }
+  }
+
+  if (rootChildren.length === 0 && !commentText(gameComment) && editing !== null) {
     return (
       <div className="flex-1 flex items-center justify-center p-6 text-gray-500 text-base">
         {t('moves.empty')}
@@ -147,129 +232,85 @@ export default function MoveList() {
     )
   }
 
-  const handleContextMenu = (e: React.MouseEvent, node: MoveTreeNode) => {
-    e.preventDefault()
-    // Check if this node is a variation (not the first child of its parent)
-    const parentId = node.parentId
-    const siblings = parentId === null ? rootChildren : treeNodes[parentId]?.children || []
-    const idx = siblings.indexOf(node.id)
-    if (idx <= 0) return // main line, no context menu
+  const content: ReactNode[] = []
+  renderLine(rootChildren, 0, true, content)
+  const intro = commentText(gameComment)
 
-    // Simple context menu: promote or delete
-    const menu = document.createElement('div')
-    menu.className =
-      'fixed bg-surface-secondary border border-[var(--border-color)] rounded shadow-xl py-1 z-[100] text-sm'
-    menu.style.left = `${e.clientX}px`
-    menu.style.top = `${e.clientY}px`
-
-    const promoteBtn = document.createElement('button')
-    promoteBtn.className =
-      'block w-full text-left px-4 py-2 hover:bg-surface-tertiary text-gray-200'
-    promoteBtn.textContent = t('variation.promote')
-    promoteBtn.onclick = () => {
-      promoteVariation(node.id)
-      document.body.removeChild(menu)
-    }
-
-    const deleteBtn = document.createElement('button')
-    deleteBtn.className =
-      'block w-full text-left px-4 py-2 hover:bg-surface-tertiary text-red-400'
-    deleteBtn.textContent = t('variation.delete')
-    deleteBtn.onclick = () => {
-      deleteVariation(node.id)
-      document.body.removeChild(menu)
-    }
-
-    menu.appendChild(promoteBtn)
-    menu.appendChild(deleteBtn)
-    document.body.appendChild(menu)
-
-    const removeMenu = (ev: MouseEvent) => {
-      if (!menu.contains(ev.target as Node)) {
-        if (document.body.contains(menu)) document.body.removeChild(menu)
-        document.removeEventListener('mousedown', removeMenu)
-      }
-    }
-    setTimeout(() => document.addEventListener('mousedown', removeMenu), 0)
-  }
+  const menuNode = menu ? treeNodes[menu.nodeId] : undefined
+  const menuIsVariation = menuNode ? isVariation(menuNode) : false
+  const closeMenu = () => setMenu(null)
 
   return (
-    <div
-      ref={scrollRef}
-      className="overflow-y-auto flex-1 p-3 text-base font-mono leading-relaxed"
-    >
-      <div className="flex flex-wrap items-baseline gap-y-0.5">
-        {tokens.map((token, i) => {
-          if (token.type === 'varStart') {
-            return (
-              <span
-                key={`vs${i}`}
-                className="text-gray-600 mx-0.5"
-                style={{ marginLeft: token.depth > 1 ? `${(token.depth - 1) * 8}px` : undefined }}
-              >
-                {'( '}
-              </span>
-            )
-          }
+    <div ref={scrollRef} className="overflow-y-auto flex-1 p-3 text-base font-mono leading-7">
+      {editing === null ? (
+        editor(null, gameComment)
+      ) : (
+        intro && <div className="mb-1">{commentSpan(intro, () => setEditing(null))}</div>
+      )}
+      <div>{content}</div>
 
-          if (token.type === 'varEnd') {
-            return (
-              <span key={`ve${i}`} className="text-gray-600 mx-0.5">
-                {') '}
-              </span>
-            )
-          }
-
-          // Move token
-          const { node, isWhite, moveNumber, showNumber } = token
-          const isActive = node.id === currentNodeId
-
-          // Look up eval for this node
-          const lineIdx = moveHistoryNodeEvals.get(node.id)
-          const ev = lineIdx !== undefined ? evalMap.get(lineIdx) : undefined
-          const symbol = ev ? CLASSIFICATION_SYMBOLS[ev.classification] : ''
-          const color = ev ? CLASSIFICATION_COLORS[ev.classification] : undefined
-
-          // Is this a variation node? (not first child of parent)
-          const parentId = node.parentId
-          const siblings =
-            parentId === null ? rootChildren : treeNodes[parentId]?.children || []
-          const isVariation = siblings.indexOf(node.id) > 0
-
-          return (
-            <span key={node.id} className="inline-flex items-baseline">
-              {showNumber && (
-                <span className="text-gray-500 select-none mr-0.5">
-                  {moveNumber}.{!isWhite && '..'}
-                </span>
-              )}
-              <span
-                ref={isActive ? activeMoveRef : undefined}
-                onClick={() => goToNode(node.id)}
-                onContextMenu={isVariation ? (e) => handleContextMenu(e, node) : undefined}
-                className={`px-1 py-0.5 rounded cursor-pointer transition-colors ${
-                  isActive
-                    ? 'bg-accent text-white'
-                    : isVariation
-                      ? 'text-gray-400 hover:bg-surface-tertiary'
-                      : 'text-gray-200 hover:bg-surface-tertiary'
-                }`}
-              >
-                {node.san}
-                {symbol && (
-                  <span
-                    className="text-xs font-bold ml-0.5"
-                    style={{ color: isActive ? '#fff' : color }}
+      {menu && menuNode && (
+        <div
+          ref={menuRef}
+          className="fixed bg-surface-secondary border border-[var(--border-color)] rounded shadow-xl py-1 z-[100] text-sm w-56 font-sans"
+          style={{
+            left: Math.min(menu.x, window.innerWidth - 232),
+            top: Math.min(menu.y, window.innerHeight - 240)
+          }}
+        >
+          {[MOVE_MARKS, EVALUATIONS].map((group, i) => (
+            <div key={i} className="flex flex-wrap gap-0.5 px-2 py-1">
+              {group.map((nag) => {
+                const active = menuNode.nags?.includes(nag)
+                return (
+                  <button
+                    key={nag}
+                    onClick={() => {
+                      toggleNag(menuNode.id, nag)
+                      closeMenu()
+                    }}
+                    className={`min-w-[1.75rem] h-7 px-1 rounded font-mono transition-colors ${
+                      active ? 'bg-accent text-white' : 'text-gray-200 hover:bg-surface-tertiary'
+                    }`}
                   >
-                    {symbol}
-                  </span>
-                )}
-              </span>
-              <span className="w-0.5" />
-            </span>
-          )
-        })}
-      </div>
+                    {nagText(nag)}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+          <div className="border-t border-[var(--border-color)] my-1" />
+          <button
+            className="block w-full text-left px-4 py-2 hover:bg-surface-tertiary text-gray-200"
+            onClick={() => {
+              setEditing(menuNode.id)
+              closeMenu()
+            }}
+          >
+            {commentText(menuNode.comment) ? t('comment.edit') : t('comment.add')}
+          </button>
+          {menuIsVariation && (
+            <button
+              className="block w-full text-left px-4 py-2 hover:bg-surface-tertiary text-gray-200"
+              onClick={() => {
+                promoteVariation(menuNode.id)
+                closeMenu()
+              }}
+            >
+              {t('variation.promote')}
+            </button>
+          )}
+          <button
+            className="block w-full text-left px-4 py-2 hover:bg-surface-tertiary text-red-400"
+            onClick={() => {
+              deleteVariation(menuNode.id)
+              closeMenu()
+            }}
+          >
+            {menuIsVariation ? t('variation.delete') : t('variation.deleteFromHere')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

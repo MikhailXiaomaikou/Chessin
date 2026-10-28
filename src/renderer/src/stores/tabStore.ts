@@ -12,6 +12,8 @@ export interface TabData {
   rootChildren: string[]
   currentNodeId: string | null
   lastMove: { from: string; to: string } | null
+  headers: Record<string, string>
+  gameComment: string
 }
 
 export interface TabState {
@@ -35,7 +37,9 @@ function snapshotGame(): Omit<TabData, 'id' | 'name'> {
     treeNodes: s.treeNodes,
     rootChildren: s.rootChildren,
     currentNodeId: s.currentNodeId,
-    lastMove: s.lastMove
+    lastMove: s.lastMove,
+    headers: s.headers,
+    gameComment: s.gameComment
   }
 }
 
@@ -101,7 +105,9 @@ function loadGameFromTab(tab: TabData): void {
     currentNodeId: tab.currentNodeId,
     moveHistory,
     currentMoveIndex,
-    lastMove: tab.lastMove
+    lastMove: tab.lastMove,
+    headers: tab.headers,
+    gameComment: tab.gameComment
   })
 }
 
@@ -117,7 +123,9 @@ export const useTabStore = create<TabState>((set, get) => ({
       treeNodes: {},
       rootChildren: [],
       currentNodeId: null,
-      lastMove: null
+      lastMove: null,
+      headers: {},
+      gameComment: ''
     }
   ],
   activeTabId: initialTabId,
@@ -138,7 +146,9 @@ export const useTabStore = create<TabState>((set, get) => ({
       treeNodes: {},
       rootChildren: [],
       currentNodeId: null,
-      lastMove: null
+      lastMove: null,
+      headers: {},
+      gameComment: ''
     }
 
     set({ tabs: [...updatedTabs, newTab], activeTabId: newTab.id })

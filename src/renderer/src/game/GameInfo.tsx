@@ -15,6 +15,29 @@ export default function GameInfo() {
   const isCheck = useGameStore((s) => s.isCheck)
   const moveHistory = useGameStore((s) => s.moveHistory)
   const currentMoveIndex = useGameStore((s) => s.currentMoveIndex)
+  const headers = useGameStore((s) => s.headers)
+
+  // PGN marks unknown values with "?" (e.g. "????.??.??").
+  const tag = (key: string): string => {
+    const value = headers[key]?.trim() ?? ''
+    return /^[?.*\s-]*$/.test(value) ? '' : value
+  }
+  const player = (name: string, elo: string) => (elo && elo !== '0' ? `${name} (${elo})` : name)
+  const white = tag('White')
+  const black = tag('Black')
+  const players =
+    white || black
+      ? `${player(white || '?', tag('WhiteElo'))} – ${player(black || '?', tag('BlackElo'))}`
+      : ''
+  const round = tag('Round')
+  const details = [
+    tag('Event'),
+    tag('Site'),
+    tag('Date').replace(/\.\?\?/g, ''),
+    round ? `${t('game.round')} ${round}` : ''
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   // Scan all positions from the start up to the current move index.
   // Return the deepest (most specific) opening match found.
@@ -58,6 +81,17 @@ export default function GameInfo() {
             : t('game.ready')}
         </span>
       </div>
+      {players && (
+        <div className="mt-1 text-sm text-gray-300 truncate" title={players}>
+          {players}
+          {tag('Result') && <span className="ml-2 text-gray-500">{tag('Result')}</span>}
+        </div>
+      )}
+      {details && (
+        <div className="text-xs text-gray-500 truncate" title={details}>
+          {details}
+        </div>
+      )}
       {opening && opening.eco !== 'A00' && (
         <div className="mt-1 text-sm text-accent">
           <span className="text-gray-500 mr-1">{opening.eco}</span>

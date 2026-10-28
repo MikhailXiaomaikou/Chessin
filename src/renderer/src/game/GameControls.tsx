@@ -128,8 +128,9 @@ export default function GameControls() {
         <ImportDialog
           onClose={() => setShowImport(false)}
           onImportPgn={(pgn) => {
-            loadPgn(pgn)
+            if (!loadPgn(pgn)) return false
             setShowImport(false)
+            return true
           }}
           onImportFen={(fen) => {
             newGame(fen)
@@ -147,7 +148,8 @@ function ImportDialog({
   onImportFen
 }: {
   onClose: () => void
-  onImportPgn: (pgn: string) => void
+  /** Returns false if the PGN held no game. */
+  onImportPgn: (pgn: string) => boolean
   onImportFen: (fen: string) => void
 }) {
   const t = useT()
@@ -167,8 +169,8 @@ function ImportDialog({
         return
       }
       onImportFen(trimmed)
-    } else {
-      onImportPgn(trimmed)
+    } else if (!onImportPgn(trimmed)) {
+      setError(t('import.invalidPgn'))
     }
   }
 
