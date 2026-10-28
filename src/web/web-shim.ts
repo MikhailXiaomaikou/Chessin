@@ -57,11 +57,24 @@ export function installWebShim() {
     engine: stockfishBridge,
 
     database: {
+      // The SQLite engine is desktop-only for now; these stubs keep the web
+      // build functional (and crash-free) until a WASM-backed store lands.
       openFileDialog: async () => null,
       open: async () => ({ success: false, count: 0 }),
-      search: async () => [],
+      search: async () => ({ games: [], total: 0 }),
       getGame: async () => null,
-      getOpeningStats: async () => []
+      getOpeningStats: async () => ({
+        total: 0,
+        whiteWins: 0,
+        draws: 0,
+        blackWins: 0,
+        moves: []
+      }),
+      positionGames: async () => ({ games: [], total: 0 }),
+      addGame: async () => ({ success: false, id: -1 }),
+      deleteGame: async () => ({ success: false }),
+      playerSuggest: async () => [],
+      onImportProgress: () => () => {}
     },
 
     clipboard: {

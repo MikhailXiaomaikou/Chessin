@@ -2,6 +2,13 @@ import { useEffect } from 'react'
 import MainLayout from '@renderer/layout/MainLayout'
 import { useGameStore } from '@renderer/stores/gameStore'
 import { useUIStore } from '@renderer/stores/uiStore'
+import type {
+  DbGame,
+  SearchParams,
+  SearchResult,
+  PositionStats,
+  OpenResult
+} from '@renderer/database/types'
 
 declare global {
   interface Window {
@@ -34,17 +41,19 @@ declare global {
       }
       database: {
         openFileDialog: () => Promise<string | null>
-        open: (filePath: string) => Promise<{ success: boolean; count: number }>
-        search: (params: {
-          white?: string
-          black?: string
-          result?: string
-          eco?: string
+        open: (filePath: string) => Promise<OpenResult>
+        search: (params: SearchParams) => Promise<SearchResult>
+        getGame: (id: number) => Promise<DbGame | null>
+        getOpeningStats: (fen: string) => Promise<PositionStats>
+        positionGames: (params: {
+          fen: string
           limit?: number
           offset?: number
-        }) => Promise<unknown[]>
-        getGame: (index: number) => Promise<{ pgn?: string } | null>
-        getOpeningStats: (fen: string) => Promise<unknown[]>
+        }) => Promise<SearchResult>
+        addGame: (pgn: string) => Promise<{ success: boolean; id: number; error?: string }>
+        deleteGame: (id: number) => Promise<{ success: boolean; error?: string }>
+        playerSuggest: (prefix: string) => Promise<string[]>
+        onImportProgress: (callback: (data: { count: number }) => void) => () => void
       }
       clipboard: {
         writeText: (text: string) => void

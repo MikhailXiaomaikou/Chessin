@@ -20,5 +20,10 @@ export const IPC = {
   DATABASE_OPEN: 'database:open',
   DATABASE_SEARCH: 'database:search',
   DATABASE_GET_GAME: 'database:get-game',
-  DATABASE_GET_OPENING_STATS: 'database:get-opening-stats'
+  DATABASE_GET_OPENING_STATS: 'database:get-opening-stats',
+  DATABASE_POSITION_GAMES: 'database:position-games',
+  DATABASE_ADD_GAME: 'database:add-game',
+  DATABASE_DELETE_GAME: 'database:delete-game',
+  DATABASE_PLAYER_SUGGEST: 'database:player-suggest',
+  DATABASE_IMPORT_PROGRESS: 'database:import-progress'
 } as const

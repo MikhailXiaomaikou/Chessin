@@ -1,12 +1,20 @@
-import type { DatabaseGame } from './DatabasePanel'
+import type { DbGame } from './types'
 import { useT } from '@renderer/i18n/useI18n'
 
 interface GameListProps {
-  games: DatabaseGame[]
-  onSelectGame: (index: number) => void
+  games: DbGame[]
+  onSelectGame: (id: number) => void
+  /** Row number of the first game (for paginated displays). */
+  startIndex?: number
+  selectedId?: number | null
 }
 
-export default function GameList({ games, onSelectGame }: GameListProps) {
+export default function GameList({
+  games,
+  onSelectGame,
+  startIndex = 0,
+  selectedId = null
+}: GameListProps) {
   const t = useT()
 
   if (games.length === 0) {
@@ -31,10 +39,15 @@ export default function GameList({ games, onSelectGame }: GameListProps) {
           </tr>
         </thead>
         <tbody>
-          {games.map((game) => (
-            <tr key={game.index} onClick={() => onSelectGame(game.index)}
-              className="cursor-pointer hover:bg-surface-tertiary transition-colors border-b border-[var(--border-color)]">
-              <td className="px-2 py-1 text-gray-600">{game.index + 1}</td>
+          {games.map((game, i) => (
+            <tr
+              key={game.id}
+              onClick={() => onSelectGame(game.id)}
+              className={`cursor-pointer transition-colors border-b border-[var(--border-color)] ${
+                game.id === selectedId ? 'bg-surface-tertiary' : 'hover:bg-surface-tertiary'
+              }`}
+            >
+              <td className="px-2 py-1 text-gray-600">{startIndex + i + 1}</td>
               <td className="px-2 py-1 text-gray-200">
                 {game.white}
                 {game.whiteElo && <span className="text-gray-500 ml-1">({game.whiteElo})</span>}

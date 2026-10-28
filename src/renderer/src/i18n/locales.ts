@@ -6,6 +6,7 @@ const en = {
   // MainLayout
   'tab.moves': 'Moves',
   'tab.database': 'Database',
+  'tab.reference': 'Reference',
 
   // BoardControls
   'board.flip': 'Flip',
@@ -148,6 +149,9 @@ const en = {
   'db.supportedFormats': 'Supports PGN, ChessBase CBH, and CBV formats',
   'db.open': 'Open...',
   'db.loading': 'Loading...',
+  'db.importing': 'Importing & indexing…',
+  'db.prev': 'Prev',
+  'db.next': 'Next',
 
   // GameList
   'db.headerNum': '#',
@@ -162,9 +166,22 @@ const en = {
   'filter.white': 'White',
   'filter.black': 'Black',
   'filter.eco': 'ECO',
+  'filter.event': 'Event',
+  'filter.minElo': 'Min Elo',
+  'filter.ignoreColors': 'Either color',
   'filter.anyResult': 'Any result',
   'filter.search': 'Search',
   'filter.clear': 'Clear',
+
+  // Reference / opening tree
+  'ref.title': 'Opening Reference',
+  'ref.games': 'games',
+  'ref.move': 'Move',
+  'ref.count': 'Games',
+  'ref.results': 'Results (W/D/B)',
+  'ref.noDatabase': 'Open a database to see opening statistics for the current position.',
+  'ref.noMoves': 'No games reached this position.',
+  'ref.gamesAtPosition': 'Games at this position',
 
   // Variations
   'variation.promote': 'Promote to main line',
@@ -181,6 +198,7 @@ const zh: Translations = {
   // MainLayout
   'tab.moves': '棋谱',
   'tab.database': '数据库',
+  'tab.reference': '参考库',
 
   // BoardControls
   'board.flip': '翻转',
@@ -323,6 +341,9 @@ const zh: Translations = {
   'db.supportedFormats': '支持 PGN、ChessBase CBH 和 CBV 格式',
   'db.open': '打开...',
   'db.loading': '加载中...',
+  'db.importing': '正在导入并建立索引…',
+  'db.prev': '上一页',
+  'db.next': '下一页',
 
   // GameList
   'db.headerNum': '#',
@@ -337,9 +358,22 @@ const zh: Translations = {
   'filter.white': '白方',
   'filter.black': '黑方',
   'filter.eco': 'ECO',
+  'filter.event': '赛事',
+  'filter.minElo': '最低等级分',
+  'filter.ignoreColors': '不分先后',
   'filter.anyResult': '所有结果',
   'filter.search': '搜索',
   'filter.clear': '清除',
+
+  // Reference / opening tree
+  'ref.title': '开局参考',
+  'ref.games': '局',
+  'ref.move': '着法',
+  'ref.count': '对局数',
+  'ref.results': '胜负 (白/和/黑)',
+  'ref.noDatabase': '打开数据库后即可查看当前局面的开局统计。',
+  'ref.noMoves': '没有对局到达此局面。',
+  'ref.gamesAtPosition': '到达此局面的对局',
 
   // Variations
   'variation.promote': '提升为主线',
