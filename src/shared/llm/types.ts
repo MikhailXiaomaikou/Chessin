@@ -3,7 +3,9 @@
 
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5'
 
-export type LlmProvider = 'anthropic' | 'openai'
+// 'claude-code': a Claude Pro/Max subscription, through the Claude Code CLI the
+// user is signed in to on this computer (desktop app and arena only).
+export type LlmProvider = 'anthropic' | 'openai' | 'claude-code'
 
 export type LlmEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
@@ -16,8 +18,9 @@ export interface LlmPlayerConfig {
   // Anthropic: defaults to https://api.anthropic.com.
   // OpenAI-compatible: the URL that `/chat/completions` is appended to,
   // e.g. https://api.openai.com/v1, https://api.deepseek.com/v1, http://localhost:11434/v1
+  // Claude subscription: path of the `claude` command, defaults to `claude`.
   baseUrl?: string
-  // Anthropic only: how hard the model thinks before answering.
+  // Anthropic and Claude subscription: how hard the model thinks before answering.
   effort?: LlmEffort
   // OpenAI-compatible only. Left out of the request when undefined.
   temperature?: number

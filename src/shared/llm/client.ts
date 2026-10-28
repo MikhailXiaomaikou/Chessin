@@ -125,5 +125,8 @@ export async function chatWithLlm(
   opts: { browser: boolean } = { browser: false }
 ): Promise<LlmChatResponse> {
   if (req.config.provider === 'anthropic') return chatAnthropic(req, opts.browser)
+  if (req.config.provider === 'claude-code') {
+    return { ok: false, error: 'A Claude subscription player only works in the desktop app or the arena script' }
+  }
   return chatOpenAi(req)
 }

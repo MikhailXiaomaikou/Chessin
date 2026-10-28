@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 import { Chess } from 'chess.js'
 import { playGame } from './llm-arena'
 import { assertNoToolAccess } from '../src/shared/llm/client'
+import { claudeCodeArgs } from '../src/shared/llm/claudeCode'
 import { parseMoveReply, formatMoveList } from '../src/shared/llm/prompt'
 import { detectOutcome } from '../src/shared/llm/turn'
 import type { LlmPlayerConfig } from '../src/shared/llm/types'
@@ -77,6 +78,13 @@ async function main(): Promise<void> {
   assert.equal((parseMoveReply('MOVE: 0-0-0', castle) as { ok: true; move: { san: string } }).move.san, 'O-O-O')
   assert.equal(formatMoveList({ startFen: start.fen(), sanMoves: ['e4', 'e5', 'Nf3'] }), '1. e4 e5 2. Nf3')
   assert.throws(() => assertNoToolAccess({ model: 'x', tools: [] }))
+  const ccArgs = claudeCodeArgs(
+    { config: { id: 'c', name: 'c', provider: 'claude-code', model: 'sonnet', apiKey: '', showLegalMoves: true, maxRetries: 2 }, system: 's', messages: [] },
+    '/tmp/s.txt'
+  )
+  assert.equal(ccArgs[ccArgs.indexOf('--tools') + 1], '', 'subscription players must run with no tools')
+  assert.ok(ccArgs.includes('--strict-mcp-config'))
+  assert.equal(ccArgs[ccArgs.indexOf('--setting-sources') + 1], '')
 
   // Threefold repetition is detected on a replayed game.
   const rep = new Chess()

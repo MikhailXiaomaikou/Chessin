@@ -18,12 +18,12 @@ const EFFORTS: LlmEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 function blankPlayer(provider: LlmProvider): LlmPlayerConfig {
   return {
     id: `llm_${Date.now()}`,
-    name: provider === 'anthropic' ? 'Claude' : '',
+    name: provider === 'openai' ? '' : 'Claude',
     provider,
-    model: provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : '',
+    model: provider === 'openai' ? '' : DEFAULT_ANTHROPIC_MODEL,
     apiKey: '',
-    baseUrl: provider === 'anthropic' ? '' : OPENAI_PRESETS[0].baseUrl,
-    effort: provider === 'anthropic' ? 'medium' : undefined,
+    baseUrl: provider === 'openai' ? OPENAI_PRESETS[0].baseUrl : '',
+    effort: provider === 'openai' ? undefined : 'medium',
     showLegalMoves: true,
     maxRetries: 2
   }
@@ -62,7 +62,7 @@ export default function LlmPlayersDialog({ onClose }: { onClose: () => void }) {
                   <div className="min-w-0">
                     <div className="text-sm text-gray-200 truncate">{p.name}</div>
                     <div className="text-xs text-gray-500 truncate">
-                      {p.provider === 'anthropic' ? 'Anthropic' : p.baseUrl} · {p.model}
+                      {p.provider === 'anthropic' ? 'Anthropic' : p.provider === 'claude-code' ? t('llm.providerSubscription') : p.baseUrl} · {p.model}
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
@@ -124,7 +124,8 @@ function PlayerForm({ initial, onDone }: { initial: LlmPlayerConfig; onDone: () 
     onDone()
   }
 
-  const canSave = p.model.trim() !== '' && (p.provider === 'openai' || p.apiKey.trim() !== '')
+  const subscription = p.provider === 'claude-code'
+  const canSave = p.model.trim() !== '' && (p.provider !== 'anthropic' || p.apiKey.trim() !== '')
 
   return (
     <div>
@@ -133,15 +134,16 @@ function PlayerForm({ initial, onDone }: { initial: LlmPlayerConfig; onDone: () 
       <div className="mb-3">
         <label className={labelCls}>{t('llm.provider')}</label>
         <div className="flex gap-1">
-          {(['anthropic', 'openai'] as const).map((prov) => (
+          {(['claude-code', 'anthropic', 'openai'] as const).map((prov) => (
             <button key={prov} onClick={() => switchProvider(prov)}
               className={`flex-1 py-1.5 text-xs rounded transition-colors ${
                 p.provider === prov ? 'bg-accent text-white' : 'bg-surface-tertiary text-gray-300 hover:bg-surface-hover'
               }`}>
-              {prov === 'anthropic' ? t('llm.providerAnthropic') : t('llm.providerOpenai')}
+              {prov === 'anthropic' ? t('llm.providerAnthropic') : prov === 'openai' ? t('llm.providerOpenai') : t('llm.providerSubscription')}
             </button>
           ))}
         </div>
+        {subscription && <p className="text-xs text-gray-500 mt-2">{t('llm.subscriptionNote')}</p>}
       </div>
 
       {p.provider === 'openai' && (
@@ -168,24 +170,26 @@ function PlayerForm({ initial, onDone }: { initial: LlmPlayerConfig; onDone: () 
         <div>
           <label className={labelCls}>{t('llm.model')}</label>
           <input className={inputCls} value={p.model} onChange={(e) => set('model', e.target.value)}
-            placeholder={p.provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : 'gpt-5, deepseek-chat, qwen-max ...'} />
+            placeholder={p.provider === 'openai' ? 'gpt-5, deepseek-chat, qwen-max ...' : DEFAULT_ANTHROPIC_MODEL} />
         </div>
       </div>
 
       <div className="mb-3">
-        <label className={labelCls}>{t('llm.baseUrl')}</label>
+        <label className={labelCls}>{subscription ? t('llm.claudePath') : t('llm.baseUrl')}</label>
         <input className={inputCls} value={p.baseUrl ?? ''} onChange={(e) => set('baseUrl', e.target.value)}
-          placeholder={p.provider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1'} />
+          placeholder={subscription ? 'claude' : p.provider === 'anthropic' ? 'https://api.anthropic.com' : 'https://api.openai.com/v1'} />
       </div>
 
-      <div className="mb-3">
-        <label className={labelCls}>{t('llm.apiKey')}</label>
-        <input type="password" className={inputCls} value={p.apiKey} onChange={(e) => set('apiKey', e.target.value)}
-          placeholder={p.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'} />
-      </div>
+      {!subscription && (
+        <div className="mb-3">
+          <label className={labelCls}>{t('llm.apiKey')}</label>
+          <input type="password" className={inputCls} value={p.apiKey} onChange={(e) => set('apiKey', e.target.value)}
+            placeholder={p.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'} />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 mb-3">
-        {p.provider === 'anthropic' ? (
+        {p.provider !== 'openai' ? (
           <div>
             <label className={labelCls}>{t('llm.effort')}</label>
             <select className={inputCls} value={p.effort ?? ''}
