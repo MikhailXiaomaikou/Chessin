@@ -72,5 +72,7 @@ export interface OpenResult {
   name?: string
   dbPath?: string
   imported?: boolean
+  /** ChessBase records that were not imported as games, by reason. */
+  skipped?: Partial<Record<'deleted' | 'guiding-text' | 'unsupported-encoding' | 'corrupt', number>>
   error?: string
 }

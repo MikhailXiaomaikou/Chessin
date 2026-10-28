@@ -12,19 +12,24 @@ import {
   type PositionStats,
   type BookExportOptions
 } from './GameDatabase'
-import { readCbhIndex } from './CbhReader'
+import { ChessBaseReader, type CbGame, type CbSkipReason } from '../../shared/chessbase/reader'
+import { openChessBaseFiles } from './ChessBaseFiles'
 import { extractCbv } from './CbvReader'
 
 // Re-exported for IPC/consumers (keeps the old type names available).
 export type DatabaseGame = GameRow
 export type DatabaseSearchParams = SearchParams
 
+export type SkipCounts = Partial<Record<CbSkipReason, number>>
+
 export interface OpenResult {
   count: number
   name: string
   dbPath: string
-  /** True when a PGN/CBH had to be imported into a fresh index this time. */
+  /** True when a PGN/ChessBase file had to be imported into a fresh index this time. */
   imported: boolean
+  /** ChessBase records that were not imported as games, by reason. */
+  skipped?: SkipCounts
 }
 
 type ProgressFn = (count: number) => void
@@ -35,6 +40,44 @@ const EMPTY_STATS: PositionStats = {
   draws: 0,
   blackWins: 0,
   moves: []
+}
+
+/** Decoded games of a ChessBase database, yielding to the event loop now and then. */
+async function* chessBaseGames(
+  reader: ChessBaseReader,
+  onSkip: (reason: CbSkipReason) => void
+): AsyncGenerator<CbGame> {
+  let i = 0
+  for (const entry of reader.entries()) {
+    if (++i % 250 === 0) await new Promise((resolve) => setImmediate(resolve))
+    if (entry.kind === 'game') yield entry.game
+    else onSkip(entry.reason)
+  }
+}
+
+/**
+ * What the source files looked like when an index was built. Kept inside the
+ * index rather than compared against its file time: closing a WAL database
+ * rewrites it, which would make a stale index look newer than an edited source.
+ */
+function sourceSignature(paths: string[]): string {
+  return JSON.stringify(
+    paths
+      .map((p) => {
+        const s = statSync(p)
+        return [basename(p), s.size, Math.floor(s.mtimeMs)] as const
+      })
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+  )
+}
+
+function parseSkipped(json: string | undefined): SkipCounts | undefined {
+  if (!json) return undefined
+  try {
+    return JSON.parse(json) as SkipCounts
+  } catch {
+    return undefined
+  }
 }
 
 /**
@@ -68,6 +111,32 @@ export class DatabaseManager {
     for (const suffix of ['', '-wal', '-shm']) rmSync(dbPath + suffix, { force: true })
   }
 
+  /** Drop a half-built index so it is never mistaken for an up-to-date one. */
+  private discard(dbPath: string): void {
+    this.close()
+    this.removeCacheFiles(dbPath)
+  }
+
+  /** The index at `cachePath` if it was built from exactly these sources, or null. */
+  private reuse(cachePath: string, signature: string): GameDatabase | null {
+    if (!existsSync(cachePath)) return null
+    let db: GameDatabase | null = null
+    try {
+      db = new GameDatabase(cachePath)
+      if (
+        db.count() > 0 &&
+        db.schemaVersion() >= SCHEMA_VERSION &&
+        db.getMeta('source') === signature
+      ) {
+        return db
+      }
+    } catch {
+      // unreadable — rebuilt below
+    }
+    db?.close() // stale, empty, older schema or damaged
+    return null
+  }
+
   async openDatabase(filePath: string, onProgress?: ProgressFn): Promise<OpenResult> {
     const ext = filePath.toLowerCase().split('.').pop()
     switch (ext) {
@@ -96,56 +165,82 @@ export class DatabaseManager {
   private async openPgn(filePath: string, onProgress?: ProgressFn): Promise<OpenResult> {
     mkdirSync(this.cacheDir, { recursive: true })
     const cachePath = this.cachePathFor(filePath)
-
-    const fresh =
-      existsSync(cachePath) && statSync(cachePath).mtimeMs >= statSync(filePath).mtimeMs
-
     this.close()
+    this.currentName = basename(filePath)
 
-    let imported = false
-    if (fresh) {
-      this.db = new GameDatabase(cachePath)
-      if (this.db.count() === 0 || this.db.schemaVersion() < SCHEMA_VERSION) {
-        // Empty, or written by an older schema — rebuild it.
-        this.db.close()
-        this.removeCacheFiles(cachePath)
-        this.db = new GameDatabase(cachePath)
-        await this.db.importPgnFile(filePath, { onProgress })
-        imported = true
-      }
-    } else {
-      this.removeCacheFiles(cachePath)
-      this.db = new GameDatabase(cachePath)
-      await this.db.importPgnFile(filePath, { onProgress })
-      imported = true
+    const signature = sourceSignature([filePath])
+    const cached = this.reuse(cachePath, signature)
+    if (cached) {
+      this.db = cached
+      return { count: cached.count(), name: this.currentName, dbPath: cachePath, imported: false }
     }
 
-    this.currentName = basename(filePath)
-    return { count: this.db.count(), name: this.currentName, dbPath: cachePath, imported }
-  }
-
-  private async openCbh(filePath: string, onProgress?: ProgressFn): Promise<OpenResult> {
-    const entries = await readCbhIndex(filePath)
-    mkdirSync(this.cacheDir, { recursive: true })
-    const cachePath = this.cachePathFor(filePath)
-
-    this.close()
     this.removeCacheFiles(cachePath)
     this.db = new GameDatabase(cachePath)
-    // ChessBase move data isn't decoded yet — import the header index so games
-    // are searchable; movetext stays empty until .cbg decoding lands.
-    this.db.importHeaderGames(entries.map((e) => e.headers))
-    onProgress?.(entries.length)
-
-    this.currentName = basename(filePath)
+    try {
+      await this.db.importPgnFile(filePath, { onProgress })
+    } catch (err) {
+      this.discard(cachePath)
+      throw err
+    }
+    this.db.setMeta('source', signature)
     return { count: this.db.count(), name: this.currentName, dbPath: cachePath, imported: true }
+  }
+
+  /**
+   * A ChessBase database: every game is decoded from .cbg (with variations and
+   * annotations from .cba) and indexed like any other.
+   */
+  private async openCbh(
+    cbhPath: string,
+    onProgress?: ProgressFn,
+    displayName = basename(cbhPath)
+  ): Promise<OpenResult> {
+    const cb = openChessBaseFiles(cbhPath)
+    try {
+      mkdirSync(this.cacheDir, { recursive: true })
+      const cachePath = this.cachePathFor(cbhPath)
+      this.close()
+      this.currentName = displayName
+
+      const signature = sourceSignature(cb.paths)
+      const cached = this.reuse(cachePath, signature)
+      if (cached) {
+        this.db = cached
+        return {
+          count: cached.count(),
+          name: displayName,
+          dbPath: cachePath,
+          imported: false,
+          skipped: parseSkipped(cached.getMeta('skipped'))
+        }
+      }
+
+      this.removeCacheFiles(cachePath)
+      this.db = new GameDatabase(cachePath)
+      const skipped: SkipCounts = {}
+      try {
+        const games = chessBaseGames(new ChessBaseReader(cb.files), (reason) => {
+          skipped[reason] = (skipped[reason] ?? 0) + 1
+        })
+        await this.db.importGames(games, { onProgress })
+      } catch (err) {
+        this.discard(cachePath)
+        throw err
+      }
+      this.db.setMeta('skipped', JSON.stringify(skipped))
+      this.db.setMeta('source', signature)
+      return { count: this.db.count(), name: displayName, dbPath: cachePath, imported: true, skipped }
+    } finally {
+      cb.close()
+    }
   }
 
   private async openCbv(filePath: string, onProgress?: ProgressFn): Promise<OpenResult> {
     const tempDir = join(this.cacheDir, 'cbv-extract')
     mkdirSync(tempDir, { recursive: true })
     const cbhPath = await extractCbv(filePath, tempDir)
-    return this.openCbh(cbhPath, onProgress)
+    return this.openCbh(cbhPath, onProgress, basename(filePath))
   }
 
   search(params: DatabaseSearchParams): SearchResult {

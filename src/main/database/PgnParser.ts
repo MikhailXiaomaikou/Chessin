@@ -121,6 +121,8 @@ export function extractMainline(movetext: string): string[] {
     const token = movetext.slice(i, j)
     i = j
     if (depth === 0) {
+      // A null move can't be replayed: the indexed main line ends there.
+      if (token === '--' || token === 'Z0') break
       const san = cleanSan(token)
       if (san) moves.push(san)
     }

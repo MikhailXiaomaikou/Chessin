@@ -152,6 +152,11 @@ const en = {
   'db.importing': 'Importing & indexing…',
   'db.prev': 'Prev',
   'db.next': 'Next',
+  'db.skipped': 'Not imported',
+  'db.skip.guiding-text': 'guiding texts',
+  'db.skip.deleted': 'deleted games',
+  'db.skip.unsupported-encoding': 'Chess960 / variant games',
+  'db.skip.corrupt': 'damaged records',
 
   // GameList
   'db.headerNum': '#',
@@ -379,6 +384,11 @@ const zh: Translations = {
   'db.importing': '正在导入并建立索引…',
   'db.prev': '上一页',
   'db.next': '下一页',
+  'db.skipped': '未导入',
+  'db.skip.guiding-text': '引导文本',
+  'db.skip.deleted': '已删除对局',
+  'db.skip.unsupported-encoding': 'Chess960 / 变体对局',
+  'db.skip.corrupt': '损坏记录',
 
   // GameList
   'db.headerNum': '#',

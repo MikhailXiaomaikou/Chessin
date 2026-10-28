@@ -38,6 +38,11 @@ describe('extractMainline', () => {
     expect(extractMainline(movetext)).toEqual(['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'])
   })
 
+  it('ends the main line at a null move, but ignores null moves in variations', () => {
+    expect(extractMainline('1. e4 -- 2. d4 d5 *')).toEqual(['e4'])
+    expect(extractMainline('1. e4 (1. d4 --) 1... e5 *')).toEqual(['e4', 'e5'])
+  })
+
   it('handles nested variations', () => {
     const movetext = '1. d4 d5 2. c4 (2. Nf3 Nf6 (2... e6 3. g3)) 2... e6'
     expect(extractMainline(movetext)).toEqual(['d4', 'd5', 'c4', 'e6'])

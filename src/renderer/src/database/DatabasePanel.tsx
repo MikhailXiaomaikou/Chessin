@@ -4,6 +4,7 @@ import GameFilter from './GameFilter'
 import { useGameStore } from '@renderer/stores/gameStore'
 import { useDatabaseStore } from '@renderer/stores/databaseStore'
 import { useT } from '@renderer/i18n/useI18n'
+import type { TranslationKey } from '@renderer/i18n/locales'
 import type { DbGame, SearchParams } from './types'
 
 const PAGE_SIZE = 100
@@ -55,6 +56,14 @@ export default function DatabasePanel() {
       setDbName(result.name || filePath.split(/[/\\]/).pop() || filePath)
       setIsOpen(true)
       setOpened(result.name || '', result.count || 0)
+      // Say what a ChessBase import left out, so a lower count isn't a mystery.
+      const skipped = Object.entries(result.skipped ?? {}).filter(([, n]) => (n ?? 0) > 0)
+      if (skipped.length) {
+        const total = skipped.reduce((sum, [, n]) => sum + (n ?? 0), 0)
+        const parts = skipped.map(([reason, n]) => `${t(`db.skip.${reason}` as TranslationKey)} ${n}`)
+        setNotice(`${t('db.skipped')} ${total.toLocaleString()}: ${parts.join(' · ')}`)
+        setTimeout(() => setNotice(''), 10000)
+      }
       await runSearch({}, 0)
     } else {
       setLoading(false)

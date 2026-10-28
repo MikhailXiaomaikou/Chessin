@@ -375,11 +375,22 @@ export class GameDatabase {
 
   /** Import all games from a PGN file, streaming it line by line. */
   async importPgnFile(filePath: string, opts: ImportOptions = {}): Promise<number> {
+    return this.importGames(iteratePgnFile(filePath), opts)
+  }
+
+  /**
+   * Import parsed games from any source — a PGN stream, a ChessBase reader —
+   * committing every 2000 games.
+   */
+  async importGames(
+    games: Iterable<ParsedPgnGame> | AsyncIterable<ParsedPgnGame>,
+    opts: ImportOptions = {}
+  ): Promise<number> {
     const indexPositions = opts.indexPositions !== false
     let n = 0
     this.db.exec('BEGIN')
     try {
-      for await (const game of iteratePgnFile(filePath)) {
+      for await (const game of games) {
         this.addParsedGame(game, indexPositions)
         n++
         if (n % 2000 === 0) {
@@ -416,10 +427,18 @@ export class GameDatabase {
 
   /** Schema version this file was created with (older ones get rebuilt). */
   schemaVersion(): number {
-    const row = this.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as
+    return parseInt(this.getMeta('schema_version') ?? '0') || 0
+  }
+
+  getMeta(key: string): string | undefined {
+    const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
       | { value: string }
       | undefined
-    return row ? parseInt(row.value) || 0 : 0
+    return row?.value
+  }
+
+  setMeta(key: string, value: string): void {
+    this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, value)
   }
 
   private buildWhere(params: SearchParams): { sql: string; bind: Record<string, unknown> } {
