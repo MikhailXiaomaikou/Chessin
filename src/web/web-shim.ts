@@ -2,6 +2,26 @@
 // This replaces Electron IPC with browser-compatible implementations.
 
 import { stockfishBridge } from './stockfish-worker-bridge'
+import { PolyglotBook, BOOK_ENTRY_SIZE } from '../shared/chess/polyglotBook'
+
+// Opening books work fully in the browser: the reader is plain TypeScript.
+let webBook: PolyglotBook | null = null
+const pickedBooks = new Map<string, Uint8Array>()
+
+function pickBookFile(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.bin'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file) return resolve(null)
+      pickedBooks.set(file.name, new Uint8Array(await file.arrayBuffer()))
+      resolve(file.name)
+    }
+    input.click()
+  })
+}
 
 export function installWebShim() {
   // Only install if electronAPI is not already provided (i.e., not in Electron)
@@ -75,6 +95,25 @@ export function installWebShim() {
       deleteGame: async () => ({ success: false }),
       playerSuggest: async () => [],
       onImportProgress: () => () => {}
+    },
+
+    book: {
+      openFileDialog: pickBookFile,
+      load: async (name: string) => {
+        const bytes = pickedBooks.get(name)
+        if (!bytes) return { success: false, error: 'Book file is no longer available' }
+        if (bytes.byteLength === 0 || bytes.byteLength % BOOK_ENTRY_SIZE !== 0) {
+          return { success: false, error: 'Not a Polyglot book' }
+        }
+        webBook = new PolyglotBook(bytes)
+        return { success: true, name, entries: webBook.entryCount }
+      },
+      lookup: async (fen: string) => (webBook ? webBook.lookup(fen) : []),
+      close: async () => {
+        webBook = null
+        return { success: true }
+      },
+      exportFromDatabase: async () => ({ success: false, error: 'Not available on web yet' })
     },
 
     clipboard: {

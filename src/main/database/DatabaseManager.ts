@@ -4,11 +4,13 @@ import { basename, resolve, join } from 'path'
 import { tmpdir } from 'os'
 import {
   GameDatabase,
+  SCHEMA_VERSION,
   type GameRow,
   type SearchParams,
   type SearchResult,
   type OpeningMove,
-  type PositionStats
+  type PositionStats,
+  type BookExportOptions
 } from './GameDatabase'
 import { readCbhIndex } from './CbhReader'
 import { extractCbv } from './CbvReader'
@@ -103,8 +105,8 @@ export class DatabaseManager {
     let imported = false
     if (fresh) {
       this.db = new GameDatabase(cachePath)
-      if (this.db.count() === 0) {
-        // Stale/empty cache — rebuild it.
+      if (this.db.count() === 0 || this.db.schemaVersion() < SCHEMA_VERSION) {
+        // Empty, or written by an older schema — rebuild it.
         this.db.close()
         this.removeCacheFiles(cachePath)
         this.db = new GameDatabase(cachePath)
@@ -180,6 +182,10 @@ export class DatabaseManager {
 
   playerSuggestions(prefix: string): string[] {
     return this.db ? this.db.playerSuggestions(prefix) : []
+  }
+
+  exportPolyglotBook(opts?: BookExportOptions): Uint8Array | null {
+    return this.db ? this.db.exportPolyglotBook(opts) : null
   }
 
   getGameCount(): number {

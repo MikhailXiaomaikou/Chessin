@@ -4,6 +4,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { Chess } from 'chess.js'
 import { GameDatabase } from './GameDatabase'
+import { PolyglotBook } from '../../shared/chess/polyglotBook'
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
@@ -197,5 +198,45 @@ describe('GameDatabase', () => {
     expect(fileDb.positionStats(START).total).toBe(4)
     fileDb.close()
     rmSync(path, { force: true })
+  })
+
+  it('exports a Polyglot book that round-trips through the reader', () => {
+    const book = new PolyglotBook(db.exportPolyglotBook())
+    const start = book.lookup(START)
+    expect(start.map((m) => m.san)).toEqual(['e4', 'd4'])
+    expect(start[0].weight).toBe(3)
+    expect(start[1].weight).toBe(1)
+    const afterE4 = book.lookup(fenAfter(['e4']))
+    expect(afterE4.find((m) => m.san === 'e5')?.weight).toBe(2)
+    expect(afterE4.find((m) => m.san === 'c5')?.weight).toBe(1)
+  })
+
+  it('weights exported moves by score for the side to move', () => {
+    const book = new PolyglotBook(db.exportPolyglotBook({ weighting: 'score' }))
+    // After 1.e4, ...e5 scored a loss and a draw for Black (1 pt), ...c5 a win (2 pts).
+    const afterE4 = book.lookup(fenAfter(['e4']))
+    expect(afterE4[0].san).toBe('c5')
+    expect(afterE4.find((m) => m.san === 'e5')?.weight).toBe(1)
+  })
+
+  it('exports castling in Polyglot king-takes-rook form', () => {
+    const castled = new GameDatabase(':memory:')
+    castled.importPgnString(`[White "A"]
+[Black "B"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. O-O Bc5 1-0`)
+    const book = new PolyglotBook(castled.exportPolyglotBook())
+    const moves = book.lookup(fenAfter(['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Nf6']))
+    expect(moves[0]).toMatchObject({ san: 'O-O', uci: 'e1g1' })
+    castled.close()
+  })
+
+  it('respects maxPly and minGames when exporting', () => {
+    const shallow = new PolyglotBook(db.exportPolyglotBook({ maxPly: 1 }))
+    expect(shallow.lookup(START)).toHaveLength(2)
+    expect(shallow.lookup(fenAfter(['e4']))).toEqual([])
+    const popular = new PolyglotBook(db.exportPolyglotBook({ minGames: 2 }))
+    expect(popular.lookup(START).map((m) => m.san)).toEqual(['e4']) // d4 was played once
   })
 })

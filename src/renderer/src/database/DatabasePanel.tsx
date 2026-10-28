@@ -19,6 +19,7 @@ export default function DatabasePanel() {
   const [importCount, setImportCount] = useState<number | null>(null)
   const [dbName, setDbName] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [notice, setNotice] = useState('')
   const paramsRef = useRef<SearchParams>({})
 
   // Forward import progress from the main process.
@@ -71,6 +72,18 @@ export default function DatabasePanel() {
     if (game?.pgn) useGameStore.getState().loadPgn(game.pgn)
   }, [])
 
+  const handleExportBook = useCallback(async () => {
+    if (!window.electronAPI?.book) return
+    const res = await window.electronAPI.book.exportFromDatabase()
+    if (res.success) {
+      setNotice(`${t('book.exported')} · ${(res.entries ?? 0).toLocaleString()} ${t('book.entries')}`)
+      setTimeout(() => setNotice(''), 4000)
+    } else if (!res.canceled) {
+      // eslint-disable-next-line no-alert
+      alert(res.error || 'Export failed')
+    }
+  }, [t])
+
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   if (!isOpen) {
@@ -110,13 +123,26 @@ export default function DatabasePanel() {
             {total.toLocaleString()} {t('ref.games')}
           </span>
         </div>
-        <button
-          onClick={handleOpenDatabase}
-          className="text-[10px] text-accent hover:text-accent-hover transition-colors shrink-0"
-        >
-          {t('db.open')}
-        </button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={handleExportBook}
+            className="text-[10px] text-gray-400 hover:text-gray-200 transition-colors"
+          >
+            {t('book.export')}
+          </button>
+          <button
+            onClick={handleOpenDatabase}
+            className="text-[10px] text-accent hover:text-accent-hover transition-colors"
+          >
+            {t('db.open')}
+          </button>
+        </div>
       </div>
+      {notice && (
+        <div className="px-3 py-1 text-[10px] text-accent border-b border-[var(--border-color)]">
+          {notice}
+        </div>
+      )}
       <GameFilter onSearch={handleSearch} />
       {loading ? (
         <div className="flex-1 flex items-center justify-center">

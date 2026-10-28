@@ -183,6 +183,17 @@ const en = {
   'ref.noMoves': 'No games reached this position.',
   'ref.gamesAtPosition': 'Games at this position',
 
+  // Opening book
+  'book.title': 'Opening Book',
+  'book.load': 'Load book…',
+  'book.change': 'Change',
+  'book.close': 'Close',
+  'book.none': 'Load a Polyglot (.bin) book to see its moves here.',
+  'book.noMoves': 'Out of book',
+  'book.entries': 'entries',
+  'book.export': 'Export book',
+  'book.exported': 'Book exported',
+
   // Variations
   'variation.promote': 'Promote to main line',
   'variation.delete': 'Delete variation'
@@ -374,6 +385,17 @@ const zh: Translations = {
   'ref.noDatabase': '打开数据库后即可查看当前局面的开局统计。',
   'ref.noMoves': '没有对局到达此局面。',
   'ref.gamesAtPosition': '到达此局面的对局',
+
+  // Opening book
+  'book.title': '开局书',
+  'book.load': '加载开局书…',
+  'book.change': '更换',
+  'book.close': '关闭',
+  'book.none': '加载 Polyglot (.bin) 开局书后，这里会显示书内着法。',
+  'book.noMoves': '已出书',
+  'book.entries': '条',
+  'book.export': '导出开局书',
+  'book.exported': '开局书已导出',
 
   // Variations
   'variation.promote': '提升为主线',

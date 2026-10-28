@@ -2,12 +2,16 @@ import { useEffect } from 'react'
 import MainLayout from '@renderer/layout/MainLayout'
 import { useGameStore } from '@renderer/stores/gameStore'
 import { useUIStore } from '@renderer/stores/uiStore'
+import { useBookStore } from '@renderer/stores/bookStore'
 import type {
   DbGame,
   SearchParams,
   SearchResult,
   PositionStats,
-  OpenResult
+  OpenResult,
+  BookMove,
+  BookLoadResult,
+  BookExportResult
 } from '@renderer/database/types'
 
 declare global {
@@ -55,6 +59,17 @@ declare global {
         playerSuggest: (prefix: string) => Promise<string[]>
         onImportProgress: (callback: (data: { count: number }) => void) => () => void
       }
+      book: {
+        openFileDialog: () => Promise<string | null>
+        load: (filePath: string) => Promise<BookLoadResult>
+        lookup: (fen: string) => Promise<BookMove[]>
+        close: () => Promise<{ success: boolean }>
+        exportFromDatabase: (opts?: {
+          maxPly?: number
+          minGames?: number
+          weighting?: 'popularity' | 'score'
+        }) => Promise<BookExportResult>
+      }
       clipboard: {
         writeText: (text: string) => void
       }
@@ -76,6 +91,16 @@ export default function App() {
   useEffect(() => {
     document.documentElement.className = theme
   }, [theme])
+
+  // Reopen the opening book from the last session, if any.
+  useEffect(() => {
+    const { path, setLoaded, clear } = useBookStore.getState()
+    if (!path || !window.electronAPI?.book) return
+    window.electronAPI.book.load(path).then((res) => {
+      if (res.success) setLoaded(path, res.name ?? '', res.entries ?? 0)
+      else clear()
+    })
+  }, [])
 
   // Register menu event handlers
   useEffect(() => {

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mkdtempSync, writeFileSync, utimesSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import Database from 'better-sqlite3'
 import { DatabaseManager } from './DatabaseManager'
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -55,6 +56,29 @@ describe('DatabaseManager companion index', () => {
     // Make the cached index look stale relative to the PGN.
     const past = new Date(Date.now() - 60_000)
     utimesSync(first.dbPath, past, past)
+
+    const second = await mgr.openDatabase(pgn)
+    expect(second.imported).toBe(true)
+    expect(second.count).toBe(2)
+
+    mgr.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('rebuilds a cached index written by an older schema', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'chessin-mgr-'))
+    const pgn = join(dir, 'games.pgn')
+    writeFileSync(pgn, SAMPLE)
+
+    const mgr = new DatabaseManager()
+    mgr.setCacheDir(join(dir, 'cache'))
+    const first = await mgr.openDatabase(pgn)
+    mgr.close()
+
+    // Pretend the cache predates the current encoding.
+    const raw = new Database(first.dbPath)
+    raw.prepare("UPDATE meta SET value = '1' WHERE key = 'schema_version'").run()
+    raw.close()
 
     const second = await mgr.openDatabase(pgn)
     expect(second.imported).toBe(true)

@@ -87,6 +87,22 @@ const electronAPI = {
     }
   },
 
+  book: {
+    openFileDialog: (): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.BOOK_OPEN_DIALOG),
+    load: (filePath: string) =>
+      ipcRenderer.invoke(IPC.BOOK_LOAD, filePath),
+    lookup: (fen: string) =>
+      ipcRenderer.invoke(IPC.BOOK_LOOKUP, fen),
+    close: () =>
+      ipcRenderer.invoke(IPC.BOOK_CLOSE),
+    exportFromDatabase: (opts?: {
+      maxPly?: number
+      minGames?: number
+      weighting?: 'popularity' | 'score'
+    }) => ipcRenderer.invoke(IPC.BOOK_EXPORT, opts)
+  },
+
   clipboard: {
     writeText: (text: string): void => clipboard.writeText(text)
   },

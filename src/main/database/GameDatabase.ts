@@ -2,7 +2,8 @@ import Database from 'better-sqlite3'
 import type { Database as Db, Statement } from 'better-sqlite3'
 import { Chess } from 'chess.js'
 import { iteratePgnFile, iteratePgnGames, type ParsedPgnGame, type PgnGameHeader } from './PgnParser'
-import { positionId, toSignedKey, PolyglotHasher } from './polyglot'
+import { positionId, toSignedKey, PolyglotHasher } from '../../shared/chess/polyglot'
+import { writePolyglotBook } from '../../shared/chess/polyglotBook'
 
 /**
  * SQLite-backed chess game database.
@@ -14,7 +15,8 @@ import { positionId, toSignedKey, PolyglotHasher } from './polyglot'
  * game that reached this position") and the opening tree with W/D/L statistics.
  */
 
-const SCHEMA_VERSION = 1
+/** Bumped when the stored encoding changes; older indexes are rebuilt. */
+export const SCHEMA_VERSION = 2
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -49,7 +51,8 @@ CREATE INDEX IF NOT EXISTS idx_games_eco     ON games(eco);
 CREATE INDEX IF NOT EXISTS idx_games_datekey ON games(date_key);
 
 -- One row per position visited by a game. 'move' is the move played FROM that
--- position (packed from|to<<6|promo<<12), or NULL for the final position.
+-- position (packed from|to<<6|promo<<12|castle<<15), or NULL for the final
+-- position. 'ply' is the absolute half-move number, so even = White to move.
 CREATE TABLE IF NOT EXISTS positions (
   hash    INTEGER NOT NULL,
   game_id INTEGER NOT NULL,
@@ -117,7 +120,17 @@ export interface PositionStats {
   moves: OpeningMove[]
 }
 
+export interface BookExportOptions {
+  /** Only positions before this absolute ply (default 30, i.e. 15 moves each). */
+  maxPly?: number
+  /** Drop moves seen in fewer games than this (default 1). */
+  minGames?: number
+  /** 'popularity' weights by games played; 'score' by the mover's results. */
+  weighting?: 'popularity' | 'score'
+}
+
 const PROMO = ['', 'n', 'b', 'r', 'q'] // 1..4
+const CASTLE_FLAG = 1 << 15
 
 function sqToIndex(sq: string): number {
   return (sq.charCodeAt(1) - 49) * 8 + (sq.charCodeAt(0) - 97)
@@ -125,9 +138,21 @@ function sqToIndex(sq: string): number {
 function indexToSq(idx: number): string {
   return String.fromCharCode(97 + (idx & 7)) + String.fromCharCode(49 + (idx >> 3))
 }
-function encodeMove(from: string, to: string, promotion?: string): number {
+function encodeMove(from: string, to: string, promotion?: string, flags?: string): number {
   const p = promotion ? PROMO.indexOf(promotion) : 0
-  return sqToIndex(from) | (sqToIndex(to) << 6) | ((p < 0 ? 0 : p) << 12)
+  const castle = flags && (flags.includes('k') || flags.includes('q')) ? CASTLE_FLAG : 0
+  return sqToIndex(from) | (sqToIndex(to) << 6) | ((p < 0 ? 0 : p) << 12) | castle
+}
+/** Our packed move -> Polyglot's encoding (to|from<<6|promo<<12, castling as king-takes-rook). */
+function packedToPolyglot(code: number): number {
+  const from = code & 63
+  let to = (code >> 6) & 63
+  const promo = (code >> 12) & 7
+  if (code & CASTLE_FLAG) {
+    const rank = to & ~7
+    to = (to & 7) === 6 ? rank + 7 : rank // king to g -> rook h, king to c -> rook a
+  }
+  return to | (from << 6) | (promo << 12)
 }
 function decodeMove(code: number): { from: string; to: string; promotion?: string } {
   const p = (code >> 12) & 7
@@ -297,6 +322,9 @@ export class GameDatabase {
     } catch {
       return 0
     }
+    // Absolute ply of the start position, so ply parity always gives the side to move.
+    const [, turn, , , , fullmove] = chess.fen().split(' ')
+    const basePly = (Math.max(1, parseInt(fullmove) || 1) - 1) * 2 + (turn === 'b' ? 1 : 0)
     let ply = 0
     for (const san of moves) {
       const hashBefore = toSignedKey(hasher.current())
@@ -307,12 +335,17 @@ export class GameDatabase {
         break
       }
       if (!mv) break
-      this.insertPosition.run(hashBefore, gameId, ply, encodeMove(mv.from, mv.to, mv.promotion))
+      this.insertPosition.run(
+        hashBefore,
+        gameId,
+        basePly + ply,
+        encodeMove(mv.from, mv.to, mv.promotion, mv.flags)
+      )
       hasher.apply(mv)
       ply++
     }
     // Final position (no following move) — still searchable.
-    this.insertPosition.run(toSignedKey(hasher.current()), gameId, ply, null)
+    this.insertPosition.run(toSignedKey(hasher.current()), gameId, basePly + ply, null)
     return ply
   }
 
@@ -379,6 +412,14 @@ export class GameDatabase {
 
   count(): number {
     return (this.db.prepare('SELECT COUNT(*) AS c FROM games').get() as { c: number }).c
+  }
+
+  /** Schema version this file was created with (older ones get rebuilt). */
+  schemaVersion(): number {
+    const row = this.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as
+      | { value: string }
+      | undefined
+    return row ? parseInt(row.value) || 0 : 0
   }
 
   private buildWhere(params: SearchParams): { sql: string; bind: Record<string, unknown> } {
@@ -542,7 +583,7 @@ export class GameDatabase {
     try {
       const chess = new Chess(fen)
       for (const m of chess.moves({ verbose: true })) {
-        sanByCode.set(encodeMove(m.from, m.to, m.promotion), m.san)
+        sanByCode.set(encodeMove(m.from, m.to, m.promotion, m.flags), m.san)
       }
     } catch {
       // invalid FEN — leave the map empty, moves will fall back to coordinate form
@@ -619,6 +660,56 @@ export class GameDatabase {
       this.db.prepare('DELETE FROM games WHERE id = ?').run(id)
     })
     tx()
+  }
+
+  /**
+   * Build a Polyglot opening book (.bin bytes) from the position index, so a
+   * database can feed engines and other GUIs. Weights are scaled per position to
+   * fit Polyglot's 16-bit field while keeping their ratios.
+   */
+  exportPolyglotBook(opts: BookExportOptions = {}): Uint8Array {
+    const maxPly = opts.maxPly ?? 30
+    const minGames = opts.minGames ?? 1
+    const byScore = opts.weighting === 'score'
+
+    const stmt = this.db.prepare(
+      `SELECT p.hash AS hash, p.move AS move, MIN(p.ply) % 2 AS stm, COUNT(*) AS c,
+              SUM(CASE g.result WHEN 1 THEN 2 WHEN 3 THEN 1 ELSE 0 END) AS wpts,
+              SUM(CASE g.result WHEN 2 THEN 2 WHEN 3 THEN 1 ELSE 0 END) AS bpts
+       FROM positions p JOIN games g ON g.id = p.game_id
+       WHERE p.move IS NOT NULL AND p.ply < ?
+       GROUP BY p.hash, p.move
+       HAVING COUNT(*) >= ?`
+    )
+    stmt.safeIntegers(true) // 64-bit hashes must come back as exact BigInts
+    const rows = stmt.all(maxPly, minGames) as {
+      hash: bigint
+      move: bigint
+      stm: bigint
+      c: bigint
+      wpts: bigint
+      bpts: bigint
+    }[]
+
+    const byKey = new Map<bigint, { move: number; raw: number }[]>()
+    for (const r of rows) {
+      const raw = byScore ? Number(r.stm === 0n ? r.wpts : r.bpts) : Number(r.c)
+      if (raw <= 0) continue
+      const key = r.hash < 0n ? r.hash + (1n << 64n) : r.hash
+      let list = byKey.get(key)
+      if (!list) byKey.set(key, (list = []))
+      list.push({ move: packedToPolyglot(Number(r.move)), raw })
+    }
+
+    const entries: { key: bigint; move: number; weight: number }[] = []
+    for (const [key, list] of byKey) {
+      const max = Math.max(...list.map((m) => m.raw))
+      const scale = max > 0xffff ? 0xffff / max : 1
+      for (const m of list) {
+        entries.push({ key, move: m.move, weight: Math.max(1, Math.round(m.raw * scale)) })
+      }
+    }
+    return writePolyglotBook(entries)
   }
 
   /** Distinct player names matching a prefix (for autocomplete). */

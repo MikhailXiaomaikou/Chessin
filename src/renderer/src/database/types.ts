@@ -1,5 +1,22 @@
 // Shared types for the database UI, mirroring the main-process GameDatabase API.
 
+export type { BookMove } from '@shared/chess/polyglotBook'
+
+export interface BookLoadResult {
+  success: boolean
+  name?: string
+  entries?: number
+  error?: string
+}
+
+export interface BookExportResult {
+  success: boolean
+  path?: string
+  entries?: number
+  canceled?: boolean
+  error?: string
+}
+
 export interface DbGame {
   id: number
   white: string

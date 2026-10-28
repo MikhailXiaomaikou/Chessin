@@ -25,5 +25,12 @@ export const IPC = {
   DATABASE_ADD_GAME: 'database:add-game',
   DATABASE_DELETE_GAME: 'database:delete-game',
   DATABASE_PLAYER_SUGGEST: 'database:player-suggest',
-  DATABASE_IMPORT_PROGRESS: 'database:import-progress'
+  DATABASE_IMPORT_PROGRESS: 'database:import-progress',
+
+  // Opening book channels
+  BOOK_OPEN_DIALOG: 'book:open-dialog',
+  BOOK_LOAD: 'book:load',
+  BOOK_LOOKUP: 'book:lookup',
+  BOOK_CLOSE: 'book:close',
+  BOOK_EXPORT: 'book:export'
 } as const
