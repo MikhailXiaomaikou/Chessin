@@ -6,6 +6,8 @@ import type { DrawShape } from 'chessground/draw'
 import { useGameStore } from '@renderer/stores/gameStore'
 import { useUIStore } from '@renderer/stores/uiStore'
 import { useEngineStore, ENGINE_COLORS } from '@renderer/stores/engineStore'
+import { useTrainingStore } from '@renderer/stores/trainingStore'
+import { useTabStore } from '@renderer/stores/tabStore'
 import { useSounds } from '@renderer/board/hooks/useSounds'
 import {
   parseCommentShapes,
@@ -64,6 +66,13 @@ export default function ChessBoard() {
   const analysisResults = useEngineStore((s) => s.analysisResults)
   const isAnalyzing = useEngineStore((s) => s.isAnalyzing)
 
+  // A training session on this board: moves are answers, and engine arrows would give them away.
+  const trainingTabId = useTrainingStore((s) => s.active?.tabId)
+  const trainingDone = useTrainingStore((s) => s.active?.prompt === 'done')
+  const trainingHints = useTrainingStore((s) => s.active?.hints)
+  const activeTabId = useTabStore((s) => s.activeTabId)
+  const training = trainingTabId !== undefined && trainingTabId === activeTabId
+
   const playSound = useSounds()
   // Set by a left press on the board, which makes chessground erase drawn shapes.
   const leftPressRef = useRef(false)
@@ -90,12 +99,34 @@ export default function ChessBoard() {
         promotion = 'q'
       }
 
+      const trainer = useTrainingStore.getState()
+      const session = trainer.active
+      if (
+        session &&
+        session.prompt !== 'done' &&
+        session.tabId === useTabStore.getState().activeTabId
+      ) {
+        if (!trainer.answer(orig, dest, promotion)) {
+          // Not accepted: put the piece back where the position says it is.
+          const s = useGameStore.getState()
+          const turnColor = s.turn === 'w' ? 'white' : 'black'
+          cgRef.current?.set({
+            fen: s.fen,
+            turnColor,
+            lastMove: s.lastMove ? [s.lastMove.from as Key, s.lastMove.to as Key] : undefined,
+            check: s.isCheck ? turnColor : undefined,
+            movable: { color: turnColor, dests: toDests() }
+          })
+        }
+        return
+      }
+
       const result = makeMove(orig, dest, promotion)
       if (result) {
         playSound(result)
       }
     },
-    [makeMove, playSound]
+    [makeMove, playSound, toDests]
   )
 
   // Initialize chessground
@@ -206,6 +237,13 @@ export default function ChessBoard() {
   useEffect(() => {
     if (!cgRef.current) return
 
+    if (training && !trainingDone) {
+      cgRef.current.setAutoShapes(
+        (trainingHints ?? []).map((h) => ({ orig: h.from as Key, dest: h.to as Key, brush: 'green' }))
+      )
+      return
+    }
+
     if (!showEngineArrows || !isAnalyzing) {
       cgRef.current.setAutoShapes([])
       return
@@ -246,7 +284,7 @@ export default function ChessBoard() {
     }
 
     cgRef.current.setAutoShapes(shapes)
-  }, [showEngineArrows, isAnalyzing, engines, analysisResults])
+  }, [showEngineArrows, isAnalyzing, engines, analysisResults, training, trainingDone, trainingHints])
 
   return (
     <div

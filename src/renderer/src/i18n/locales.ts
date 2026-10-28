@@ -231,7 +231,41 @@ const en = {
   // Variations
   'variation.promote': 'Promote to main line',
   'variation.delete': 'Delete variation',
-  'variation.deleteFromHere': 'Delete from here'
+  'variation.deleteFromHere': 'Delete from here',
+
+  // Training
+  'tab.training': 'Training',
+  'train.intro':
+    'Save the game on the board, with its variations, as a repertoire, then drill it: the trainer plays the replies and asks for your moves. Moves you know come back less and less often; mistakes come back soon.',
+  'train.namePlaceholder': 'Repertoire name',
+  'train.side': 'I play',
+  'train.white': 'White',
+  'train.black': 'Black',
+  'train.save': 'Save as repertoire',
+  'train.noMoves': 'First play or load the lines to learn on the board.',
+  'train.noPositions': 'This repertoire has no moves for your side.',
+  'train.start': 'Train',
+  'train.update': 'Update',
+  'train.updateHint': 'Replace with the game on the board, keeping your progress',
+  'train.delete': 'Delete',
+  'train.confirmDelete': 'Delete this repertoire and its progress?',
+  'train.due': 'due',
+  'train.new': 'new',
+  'train.learned': 'learned',
+  'train.yourMove': 'Your move',
+  'train.newMove': 'New move: play the arrow',
+  'train.thinking': '…',
+  'train.correct': 'Correct',
+  'train.wrong': 'Not your repertoire move. It is',
+  'train.lineEnd': 'Line complete',
+  'train.done': 'All done for now',
+  'train.paused': 'Paused: go back to the training board',
+  'train.hint': 'Show answer',
+  'train.stop': 'Stop',
+  'train.close': 'Close',
+  'train.answered': 'answered',
+  'train.mistakes': 'mistakes',
+  'train.tabName': 'Training'
 } as const
 
 type Translations = Record<keyof typeof en, string>
@@ -469,7 +503,41 @@ const zh: Translations = {
   // Variations
   'variation.promote': '提升为主线',
   'variation.delete': '删除变着',
-  'variation.deleteFromHere': '从此处删除'
+  'variation.deleteFromHere': '从此处删除',
+
+  // Training
+  'tab.training': '训练',
+  'train.intro':
+    '把棋盘上的对局（含变着）存为开局库，然后反复练习：电脑走对方的着法，你来走自己的。熟悉的着法复习间隔越来越长，出错的着法很快会再出现。',
+  'train.namePlaceholder': '开局库名称',
+  'train.side': '我执',
+  'train.white': '白方',
+  'train.black': '黑方',
+  'train.save': '存为开局库',
+  'train.noMoves': '请先在棋盘上走出或导入要练习的变化。',
+  'train.noPositions': '这个开局库里没有你这一方的着法。',
+  'train.start': '开始练习',
+  'train.update': '更新',
+  'train.updateHint': '用棋盘上的对局替换，保留练习进度',
+  'train.delete': '删除',
+  'train.confirmDelete': '删除这个开局库及其练习进度？',
+  'train.due': '待复习',
+  'train.new': '新',
+  'train.learned': '已掌握',
+  'train.yourMove': '轮到你走',
+  'train.newMove': '新着法：按箭头走',
+  'train.thinking': '…',
+  'train.correct': '正确',
+  'train.wrong': '不是开局库中的着法，应为',
+  'train.lineEnd': '本变化完成',
+  'train.done': '今天的练习完成了',
+  'train.paused': '已暂停：回到训练棋盘继续',
+  'train.hint': '显示答案',
+  'train.stop': '停止',
+  'train.close': '关闭',
+  'train.answered': '已答',
+  'train.mistakes': '错误',
+  'train.tabName': '训练'
 }
 
 export const locales = { en, zh } as const

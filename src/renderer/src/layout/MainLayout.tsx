@@ -5,12 +5,13 @@ import EnginePanel from '@renderer/engine/EnginePanel'
 import GameControls from '@renderer/game/GameControls'
 import DatabasePanel from '@renderer/database/DatabasePanel'
 import ReferencePanel from '@renderer/database/ReferencePanel'
+import TrainingPanel from '@renderer/training/TrainingPanel'
 import BoardEditor from '@renderer/board/BoardEditor'
 import TabBar from '@renderer/layout/TabBar'
 import { useUIStore } from '@renderer/stores/uiStore'
 import { useT } from '@renderer/i18n/useI18n'
 
-type RightTab = 'notation' | 'database' | 'reference'
+type RightTab = 'notation' | 'database' | 'reference' | 'training'
 
 export default function MainLayout() {
   const t = useT()
@@ -70,12 +71,23 @@ export default function MainLayout() {
                 >
                   {t('tab.reference')}
                 </button>
+                <button
+                  onClick={() => setActiveTab('training')}
+                  className={`flex-1 py-3 text-base font-medium transition-colors ${
+                    activeTab === 'training'
+                      ? 'text-accent border-b-2 border-accent'
+                      : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {t('tab.training')}
+                </button>
               </div>
 
               <div className="flex-1 overflow-hidden">
                 {activeTab === 'notation' && <NotationPanel />}
                 {activeTab === 'database' && <DatabasePanel />}
                 {activeTab === 'reference' && <ReferencePanel />}
+                {activeTab === 'training' && <TrainingPanel />}
               </div>
             </>
           )}
