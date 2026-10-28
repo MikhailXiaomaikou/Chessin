@@ -109,20 +109,16 @@ function emitOutput(engineId: string, line: string) {
 }
 
 function createWorkerFromUrl(wasmJsUrl: string): Worker {
-  // Create a worker that loads stockfish.wasm.js
-  const workerCode = `importScripts("${wasmJsUrl}");`
-  const blob = new Blob([workerCode], { type: 'application/javascript' })
-  return new Worker(URL.createObjectURL(blob))
+  // Run the engine script directly as the worker. A blob: worker can't resolve
+  // the script's URL, and Emscripten looks for stockfish.wasm next to the
+  // worker's own location — which only works when that is the script itself.
+  return new Worker(wasmJsUrl)
 }
 
-// Detect the base URL for stockfish files
+// Absolute URL of stockfish.wasm.js, resolved against the page so it works for
+// the web build (at any sub-path) and inside Capacitor alike.
 function getStockfishUrl(): string {
-  // In Capacitor/Android, files are served from the assets directory
-  // In web, from the public directory
-  const base = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
-    ? '.'
-    : ''
-  return `${base}/stockfish/stockfish.wasm.js`
+  return new URL('stockfish/stockfish.wasm.js', document.baseURI).href
 }
 
 export const stockfishBridge = {
