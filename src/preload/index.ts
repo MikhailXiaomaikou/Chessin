@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, clipboard } from 'electron'
 import { IPC } from '../shared/ipc-channels'
+import type { LlmChatRequest, LlmChatResponse } from '../shared/llm/types'
 
 const electronAPI = {
   platform: process.platform,
@@ -66,6 +67,11 @@ const electronAPI = {
       ipcRenderer.invoke(IPC.DATABASE_GET_GAME, index),
     getOpeningStats: (fen: string) =>
       ipcRenderer.invoke(IPC.DATABASE_GET_OPENING_STATS, fen)
+  },
+
+  llm: {
+    chat: (req: LlmChatRequest): Promise<LlmChatResponse> =>
+      ipcRenderer.invoke(IPC.LLM_CHAT, req)
   },
 
   clipboard: {

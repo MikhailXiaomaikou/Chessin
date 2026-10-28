@@ -2,10 +2,12 @@ import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { IPC } from '../../shared/ipc-channels'
 import { registerEngineIpc } from './engine.ipc'
 import { registerDatabaseIpc } from './database.ipc'
+import { registerLlmIpc } from './llm.ipc'
 
 export function registerIpcHandlers(): void {
   registerEngineIpc()
   registerDatabaseIpc()
+  registerLlmIpc()
 
   // File selection for engine binary
   ipcMain.handle(IPC.FILE_SELECT_ENGINE, async () => {

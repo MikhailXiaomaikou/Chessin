@@ -1,0 +1,9 @@
+{
+  "games": 2,
+  "maxPlies": 300,
+  "out": "arena-games.pgn",
+  "players": [
+    { "name": "Claude", "provider": "anthropic", "model": "claude-opus-5-5", "effort": "medium" },
+    { "name": "DeepSeek", "provider": "openai", "baseUrl": "https://api.deepseek.com/v1", "model": "deepseek-chat" }
+  ]
+}
