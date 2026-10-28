@@ -3,11 +3,13 @@ import { IPC } from '../../shared/ipc-channels'
 import { registerEngineIpc } from './engine.ipc'
 import { registerDatabaseIpc } from './database.ipc'
 import { registerBookIpc } from './book.ipc'
+import { registerTablebaseIpc } from './tablebase.ipc'
 
 export function registerIpcHandlers(): void {
   registerEngineIpc()
   registerDatabaseIpc()
   registerBookIpc()
+  registerTablebaseIpc()
 
   // File selection for engine binary
   ipcMain.handle(IPC.FILE_SELECT_ENGINE, async () => {

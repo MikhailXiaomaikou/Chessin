@@ -14,6 +14,8 @@ export interface UIState {
   boardEditorMode: boolean
   evalBarMode: 'eval' | 'wdl'
   locale: Locale
+  /** Look up positions with ≤7 pieces in the online Lichess tablebase. */
+  tablebaseEnabled: boolean
 
   setTheme: (theme: 'dark' | 'light') => void
   setBoardTheme: (theme: UIState['boardTheme']) => void
@@ -26,6 +28,7 @@ export interface UIState {
   setBoardEditorMode: (on: boolean) => void
   setEvalBarMode: (mode: 'eval' | 'wdl') => void
   setLocale: (locale: Locale) => void
+  toggleTablebase: () => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -42,6 +45,7 @@ export const useUIStore = create<UIState>()(
       boardEditorMode: false,
       evalBarMode: 'eval',
       locale: 'zh',
+      tablebaseEnabled: true,
 
       setTheme: (theme) => {
         document.documentElement.className = theme
@@ -60,7 +64,8 @@ export const useUIStore = create<UIState>()(
         set((state) => ({ showEngineArrows: !state.showEngineArrows })),
       setBoardEditorMode: (on) => set({ boardEditorMode: on }),
       setEvalBarMode: (mode) => set({ evalBarMode: mode }),
-      setLocale: (locale) => set({ locale })
+      setLocale: (locale) => set({ locale }),
+      toggleTablebase: () => set((state) => ({ tablebaseEnabled: !state.tablebaseEnabled }))
     }),
     {
       name: 'chess-gui-ui-settings',

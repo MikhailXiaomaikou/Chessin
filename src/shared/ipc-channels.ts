@@ -32,5 +32,8 @@ export const IPC = {
   BOOK_LOAD: 'book:load',
   BOOK_LOOKUP: 'book:lookup',
   BOOK_CLOSE: 'book:close',
-  BOOK_EXPORT: 'book:export'
+  BOOK_EXPORT: 'book:export',
+
+  // Tablebase
+  TABLEBASE_PROBE: 'tablebase:probe'
 } as const

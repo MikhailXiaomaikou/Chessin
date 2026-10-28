@@ -103,6 +103,10 @@ const electronAPI = {
     }) => ipcRenderer.invoke(IPC.BOOK_EXPORT, opts)
   },
 
+  tablebase: {
+    probe: (fen: string) => ipcRenderer.invoke(IPC.TABLEBASE_PROBE, fen)
+  },
+
   clipboard: {
     writeText: (text: string): void => clipboard.writeText(text)
   },

@@ -13,6 +13,7 @@ import type {
   BookLoadResult,
   BookExportResult
 } from '@renderer/database/types'
+import type { TbProbeResponse } from '@shared/chess/tablebase'
 
 declare global {
   interface Window {
@@ -69,6 +70,9 @@ declare global {
           minGames?: number
           weighting?: 'popularity' | 'score'
         }) => Promise<BookExportResult>
+      }
+      tablebase: {
+        probe: (fen: string) => Promise<TbProbeResponse>
       }
       clipboard: {
         writeText: (text: string) => void

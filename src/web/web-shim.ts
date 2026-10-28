@@ -3,6 +3,9 @@
 
 import { stockfishBridge } from './stockfish-worker-bridge'
 import { PolyglotBook, BOOK_ENTRY_SIZE } from '../shared/chess/polyglotBook'
+import { TablebaseClient } from '../shared/chess/tablebase'
+
+const tablebaseClient = new TablebaseClient()
 
 // Opening books work fully in the browser: the reader is plain TypeScript.
 let webBook: PolyglotBook | null = null
@@ -114,6 +117,10 @@ export function installWebShim() {
         return { success: true }
       },
       exportFromDatabase: async () => ({ success: false, error: 'Not available on web yet' })
+    },
+
+    tablebase: {
+      probe: (fen: string) => tablebaseClient.probeSafe(fen)
     },
 
     clipboard: {

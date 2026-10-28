@@ -4,6 +4,7 @@ import { useGameStore } from '@renderer/stores/gameStore'
 import { useDatabaseStore } from '@renderer/stores/databaseStore'
 import { useT } from '@renderer/i18n/useI18n'
 import BookPanel from './BookPanel'
+import TablebasePanel from './TablebasePanel'
 import type { DbGame, PositionStats } from './types'
 
 const EMPTY: PositionStats = { total: 0, whiteWins: 0, draws: 0, blackWins: 0, moves: [] }
@@ -86,6 +87,7 @@ export default function ReferencePanel() {
     return (
       <div className="flex flex-col h-full overflow-hidden">
         <BookPanel />
+        <TablebasePanel />
         <div className="flex-1 flex items-center justify-center p-4">
           <p className="text-sm text-gray-500 text-center">{t('ref.noDatabase')}</p>
         </div>
@@ -103,6 +105,7 @@ export default function ReferencePanel() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <BookPanel />
+      <TablebasePanel />
       <div className="px-3 py-2 border-b border-[var(--border-color)] shrink-0">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-gray-300">{t('ref.title')}</span>
